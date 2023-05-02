@@ -2,9 +2,11 @@ use std::str;
 use std::vec::Vec;
 
 pub use nom::character::complete::{char, digit1};
+use nom::sequence::{separated_pair, tuple};
 use nom::{Err, IResult};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
+use nom::combinator::{map, map_res};
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,85 +23,83 @@ pub enum BasicLength {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModdedLength {
     Plain(BasicLength),
-    Dotted(BasicLength),
-    Triplet(BasicLength)
+    Dotted(BasicLength)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Length {
     Simple(ModdedLength),
-    Tied(ModdedLength, ModdedLength)
+    Tied(ModdedLength, ModdedLength),
+    Triplet(ModdedLength)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Note {
-    Hit(Length),
-    Rest(Length)
+    Hit,
+    Rest
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Group { notes: Vec<Note> }
+pub struct Group { notes: Vec<Note>, length: Length }
 
-fn hit(len: Length, input: &str) -> IResult<&str, Note> {
+fn hit(input: &str) -> IResult<&str, Note> {
     //  note that this is really creating a function, the parser for abc
     //  vvvvv 
     //         which is then called here, returning an IResult<&str, &str>
     //         vvvvv
-    let (rem, c) = char('x')(input)?;
-    Ok((rem, Note::Hit(len)))
+    map(char('x'), |_| { Note::Hit })(input)
 }
 
-fn rest( len: Length, input: &str) -> IResult<&str, Note> {
-    let (rem, c) = char('-')(input)?;
-    Ok((rem, Note::Rest(len)))
+fn rest(input: &str) -> IResult<&str, Note> {
+    map(char('-'), |_| { Note::Rest })(input)
 }
 
-fn note(input: &str, len: Length) -> IResult<&str, Note> {
-    alt((hit(len), rest(len)))(input)
+fn note(input: &str) -> IResult<&str, Note> {
+    alt((hit, rest))(input)
 }
 
-fn length_basic(input: &str) -> IResult<&str, Length> {
+fn length_basic(input: &str) -> IResult<&str, BasicLength> {
     match map_res(digit1, str::parse)(input) {
-        Ok(r,1) => Ok(r, Whole),
-        Ok(r,2) => Ok(r, Half),
-        Ok(r,4) => Ok(r, Fourth),
-        Ok(r,8) => Ok(r, Eighth),
-        Ok(r,16) => Ok(r, Sixteenth),
-        Ok(r,32) => Ok(r, ThirtySecond),
-        Ok(r, 64) => Ok(r, SixtyFourth),
-        e => e
+        Ok((r,1)) => Ok((r, BasicLength::Whole)),
+        Ok((r,2)) => Ok((r, BasicLength::Half)),
+        Ok((r,4)) => Ok((r, BasicLength::Fourth)),
+        Ok((r,8)) => Ok((r, BasicLength::Eighth)),
+        Ok((r,16)) => Ok((r, BasicLength::Sixteenth)),
+        Ok((r,32)) => Ok((r, BasicLength::ThirtySecond)),
+        Ok((r, 64)) => Ok((r, BasicLength::SixtyFourth)),
+        Ok((r, i)) => {
+            Err(Err::Error(nom::error::make_error(r, nom::error::ErrorKind::Fail)))
+        },
+        Err(e) => Err(e)
     }
 }
 
-fn tie_length(input: &str) -> IResult<&str, Length> {
-    let (rem, (l1,l2)) = separated_pair(length_basic, char('+'), length_basic)?;
-    Ok(rem, Tie(l1, l2))
+fn dotted_length(input: &str) -> IResult<&str, ModdedLength> {
+    map(tuple((length_basic, char('.'))), |(l, _)| { ModdedLength::Dotted(l)})(input)
+}
+
+fn modded_length(input: &str) -> IResult<&str, ModdedLength> {
+    alt((dotted_length, map(length_basic, |x| {ModdedLength::Plain(x)})))(input)
+}
+
+fn triplet_length(input: &str) -> IResult<&str, Length> {
+    map(tuple((modded_length, char('t'))), |(l, _)| { Length::Triplet(l)})(input)
+}
+
+fn tied_length(input: &str) -> IResult<&str, Length> {
+    map(separated_pair(modded_length, char('+'), modded_length), |(x, y)| { Length::Tied(x,y)})(input)
 }
 
 fn length(input: &str) -> IResult<&str, Length> {
-    let (rem, len) = alt(tie_length, length_basic)(input)?;
-    let (rem2, is_triplet) = char('t')(rem)?;
-    if is_triplet {
-        Triplet(len)
-    } else {
-        leṇ
-    }
+    alt((triplet_length, tied_length, map(modded_length, |x| { Length::Simple(x) })))(input)
 }
 
 #[test]
 fn parse_basic_length() {
-  assert_eq!(
-    length("16"),
-    Ok((
-      "",
-      Sixteenth
-    ))
-  );
-  assert_eq!(
-    length("8+16"),
-    Ok("", Tie(Eighth, Sixteenth))
-  );
-  assert_eq!(length("8t"), Triplet(Eighth))
+  assert_eq!(length("16"), Ok(("", Length::Simple(ModdedLength::Plain(BasicLength::Sixteenth)))));
+  assert_eq!(length("8+16"), Ok(("", Length::Tied(ModdedLength::Plain(BasicLength::Eighth), ModdedLength::Plain(BasicLength::Sixteenth)))));
+  assert_eq!(length("8t"), Ok(("", Length::Triplet(ModdedLength::Plain(BasicLength::Eighth)))));
+  assert_eq!(length("4.t"), Ok(("", Length::Triplet(ModdedLength::Dotted(BasicLength::Fourth)))));
 }
 
 // “x” hit
