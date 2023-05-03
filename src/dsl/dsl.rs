@@ -2,12 +2,12 @@ use std::str;
 use std::vec::Vec;
 
 pub use nom::character::complete::{char, digit1};
-use nom::sequence::{separated_pair, tuple};
+use nom::multi::many1;
+use nom::sequence::{separated_pair, tuple, delimited};
 use nom::{Err, IResult};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::combinator::{map, map_res};
-
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BasicLength {
@@ -40,13 +40,45 @@ pub enum Note {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Group { notes: Vec<Note>, length: Length }
+pub struct Times(u16);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GroupOrNote {
+    RepeatGroup(Group, Times),
+    SingleNote(Note)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Group { notes: Vec<GroupOrNote>, length: Length }
+
+static WHOLE : Length = Length::Simple(ModdedLength::Plain(BasicLength::Whole));
+static HALF : Length = Length::Simple(ModdedLength::Plain(BasicLength::Half));
+static FOURTH : Length = Length::Simple(ModdedLength::Plain(BasicLength::Fourth));
+static EIGHTH : Length = Length::Simple(ModdedLength::Plain(BasicLength::Eighth));
+static SIXTEENTH : Length = Length::Simple(ModdedLength::Plain(BasicLength::Sixteenth));
+static THIRTY_SECOND : Length = Length::Simple(ModdedLength::Plain(BasicLength::ThirtySecond));
+static SIXTY_FOURTH : Length = Length::Simple(ModdedLength::Plain(BasicLength::SixtyFourth));
+
+static WHOLE_DOTTED_TRIPLET : Length = Length::Triplet(ModdedLength::Dotted(BasicLength::Whole));
+static HALF_DOTTED_TRIPLET : Length = Length::Triplet(ModdedLength::Dotted(BasicLength::Half));
+static FOURTH_DOTTED_TRIPLET : Length = Length::Triplet(ModdedLength::Dotted(BasicLength::Fourth));
+static EIGHTH_DOTTED_TRIPLET : Length = Length::Triplet(ModdedLength::Dotted(BasicLength::Eighth));
+static SIXTEENTH_DOTTED_TRIPLET : Length = Length::Triplet(ModdedLength::Dotted(BasicLength::Sixteenth));
+static THIRTY_SECOND_DOTTED_TRIPLET : Length = Length::Triplet(ModdedLength::Dotted(BasicLength::ThirtySecond));
+static SIXTY_FOURTH_DOTTED_TRIPLET : Length = Length::Triplet(ModdedLength::Dotted(BasicLength::SixtyFourth));
+
+static WHOLE_TRIPLET : Length = Length::Triplet(ModdedLength::Plain(BasicLength::Whole));
+static HALF_TRIPLET : Length = Length::Triplet(ModdedLength::Plain(BasicLength::Half));
+static FOURTH_TRIPLET : Length = Length::Triplet(ModdedLength::Plain(BasicLength::Fourth));
+static EIGHTH_TRIPLET : Length = Length::Triplet(ModdedLength::Plain(BasicLength::Eighth));
+static SIXTEENTH_TRIPLET : Length = Length::Triplet(ModdedLength::Plain(BasicLength::Sixteenth));
+static THIRTY_SECOND_TRIPLET : Length = Length::Triplet(ModdedLength::Plain(BasicLength::ThirtySecond));
+static SIXTY_FOURTH_TRIPLET : Length = Length::Triplet(ModdedLength::Plain(BasicLength::SixtyFourth));
+
+static HIT : GroupOrNote = GroupOrNote::SingleNote(Note::Hit);
+static REST : GroupOrNote = GroupOrNote::SingleNote(Note::Rest);
 
 fn hit(input: &str) -> IResult<&str, Note> {
-    //  note that this is really creating a function, the parser for abc
-    //  vvvvv 
-    //         which is then called here, returning an IResult<&str, &str>
-    //         vvvvv
     map(char('x'), |_| { Note::Hit })(input)
 }
 
@@ -94,12 +126,28 @@ fn length(input: &str) -> IResult<&str, Length> {
     alt((triplet_length, tied_length, map(modded_length, |x| { Length::Simple(x) })))(input)
 }
 
+fn group(input: &str) -> IResult<&str, Group> {
+    let (rem, (l, n)) = tuple((length, many1(note)))(input)?;
+    Ok((rem, Group{ notes: n.iter().map(|x| GroupOrNote::SingleNote(x.clone())).collect(), length: l}))
+}
+
+fn delimited_group(input: &str) -> IResult<&str, Group> {
+    delimited(char('('), group, char(')'))(input)
+}
+
 #[test]
-fn parse_basic_length() {
-  assert_eq!(length("16"), Ok(("", Length::Simple(ModdedLength::Plain(BasicLength::Sixteenth)))));
+fn parse_length() {
+  assert_eq!(length("16"), Ok(("", SIXTEENTH.clone())));
   assert_eq!(length("8+16"), Ok(("", Length::Tied(ModdedLength::Plain(BasicLength::Eighth), ModdedLength::Plain(BasicLength::Sixteenth)))));
-  assert_eq!(length("8t"), Ok(("", Length::Triplet(ModdedLength::Plain(BasicLength::Eighth)))));
-  assert_eq!(length("4.t"), Ok(("", Length::Triplet(ModdedLength::Dotted(BasicLength::Fourth)))));
+  assert_eq!(length("8t"), Ok(("", EIGHTH_TRIPLET.clone())));
+  assert_eq!(length("4.t"), Ok(("", FOURTH_DOTTED_TRIPLET.clone())));
+}
+
+#[test]
+fn parse_group() {
+  assert_eq!(group("16x--x-"), Ok(("", Group{notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: SIXTEENTH.clone()})));
+  assert_eq!(group("8txxx"), Ok(("", Group { notes: vec![HIT.clone(), HIT.clone(), HIT.clone()], length: EIGHTH_TRIPLET.clone()})));
+  assert_eq!(group("16+32x-xx"), Ok(("", Group {notes: vec![HIT.clone(), REST.clone(), HIT.clone(), HIT.clone()], length: Length::Tied(ModdedLength::Plain(BasicLength::Sixteenth), ModdedLength::Plain(BasicLength::ThirtySecond))})))
 }
 
 // “x” hit

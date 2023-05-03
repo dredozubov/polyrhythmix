@@ -1,4 +1,4 @@
-use dsl;
+use poly::dsl;
 
 fn main() {
     println!("Hello, world!");
