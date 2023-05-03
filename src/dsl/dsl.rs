@@ -44,12 +44,12 @@ pub struct Times(u16);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GroupOrNote {
-    RepeatGroup(Group, Times),
+    SingleGroup(Group),
     SingleNote(Note)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Group { notes: Vec<GroupOrNote>, length: Length }
+pub struct Group { notes: Vec<GroupOrNote>, length: Length, times: Times }
 
 static WHOLE : Length = Length::Simple(ModdedLength::Plain(BasicLength::Whole));
 static HALF : Length = Length::Simple(ModdedLength::Plain(BasicLength::Half));
@@ -77,6 +77,10 @@ static SIXTY_FOURTH_TRIPLET : Length = Length::Triplet(ModdedLength::Plain(Basic
 
 static HIT : GroupOrNote = GroupOrNote::SingleNote(Note::Hit);
 static REST : GroupOrNote = GroupOrNote::SingleNote(Note::Rest);
+
+static ONCE : Times = Times(1);
+static TWICE: Times = Times(2);
+static THRICE : Times = Times(3);
 
 fn hit(input: &str) -> IResult<&str, Note> {
     map(char('x'), |_| { Note::Hit })(input)
@@ -126,13 +130,27 @@ fn length(input: &str) -> IResult<&str, Length> {
     alt((triplet_length, tied_length, map(modded_length, |x| { Length::Simple(x) })))(input)
 }
 
+fn times(input: &str) -> IResult<&str, Times> {
+    map(map_res(digit1, str::parse), |x| { Times(x) } )(input)
+}
+
 fn group(input: &str) -> IResult<&str, Group> {
-    let (rem, (l, n)) = tuple((length, many1(note)))(input)?;
-    Ok((rem, Group{ notes: n.iter().map(|x| GroupOrNote::SingleNote(x.clone())).collect(), length: l}))
+    let repeated = map(tuple((times, char(','), length, many1(note))), |(t, _, l, n)| { (t, l, n)} );
+    let single = map(tuple((length, many1(note))), |(l, vn)| { (Times(1), l, vn) } );
+    let (rem, (t, l, n)) = alt((repeated, single))(input)?;
+    Ok((rem, Group{ notes: n.iter().map(|x| GroupOrNote::SingleNote(x.clone())).collect(), length: l, times: t}))
 }
 
 fn delimited_group(input: &str) -> IResult<&str, Group> {
     delimited(char('('), group, char(')'))(input)
+}
+
+fn group_or_delimited_group(input: &str) -> IResult<&str, Group> {
+  alt((delimited_group, group))(input)
+}
+
+fn groups(input: &str) -> IResult<&str, Vec<Group>> {
+    many1(group_or_delimited_group)(input)
 }
 
 #[test]
@@ -145,9 +163,21 @@ fn parse_length() {
 
 #[test]
 fn parse_group() {
-  assert_eq!(group("16x--x-"), Ok(("", Group{notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: SIXTEENTH.clone()})));
-  assert_eq!(group("8txxx"), Ok(("", Group { notes: vec![HIT.clone(), HIT.clone(), HIT.clone()], length: EIGHTH_TRIPLET.clone()})));
-  assert_eq!(group("16+32x-xx"), Ok(("", Group {notes: vec![HIT.clone(), REST.clone(), HIT.clone(), HIT.clone()], length: Length::Tied(ModdedLength::Plain(BasicLength::Sixteenth), ModdedLength::Plain(BasicLength::ThirtySecond))})))
+  assert_eq!(group("16x--x-"), Ok(("", Group { times: ONCE.clone(), notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: SIXTEENTH.clone()})));
+  assert_eq!(group("8txxx"), Ok(("", Group { times: ONCE.clone(), notes: vec![HIT.clone(), HIT.clone(), HIT.clone()], length: EIGHTH_TRIPLET.clone()})));
+  assert_eq!(group("16+32x-xx"), Ok(("", Group { times: ONCE.clone(), notes: vec![HIT.clone(), REST.clone(), HIT.clone(), HIT.clone()], length: Length::Tied(ModdedLength::Plain(BasicLength::Sixteenth), ModdedLength::Plain(BasicLength::ThirtySecond))})));
+  assert_eq!(group("3,16xx"), Ok(("", Group { times: THRICE.clone(), length: SIXTEENTH.clone(), notes: vec![HIT.clone(), HIT.clone()] })));
+}
+
+#[test]
+fn parse_delimited_group() {
+    assert_eq!(delimited_group("(3,16x--x-)"), Ok(("", Group { times: THRICE.clone(), notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: SIXTEENTH.clone()})));
+}
+
+#[test]
+fn parse_group_or_delimited_group() {
+    assert_eq!(group_or_delimited_group("(3,16x--x-)"), Ok(("", Group { times: THRICE.clone(), notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: SIXTEENTH.clone()})));
+    assert_eq!(group_or_delimited_group("16x--x-"), Ok(("", Group { times: ONCE.clone(), notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: SIXTEENTH.clone()})));
 }
 
 // “x” hit
