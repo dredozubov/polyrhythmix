@@ -11,3 +11,5 @@ path = "src/bin/main.rs"
 
 [dependencies]
 nom = "*"
+midly = "0.5.3"
+derive_more = "*"

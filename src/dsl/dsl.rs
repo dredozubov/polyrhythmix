@@ -6,7 +6,7 @@ use nom::multi::many1;
 use nom::sequence::{separated_pair, tuple, delimited};
 use nom::{Err, IResult};
 use nom::branch::alt;
-use nom::bytes::complete::tag;
+
 use nom::combinator::{map, map_res};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,7 +40,7 @@ pub enum Note {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Times(u16);
+pub struct Times(pub u16);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GroupOrNote {
@@ -81,6 +81,7 @@ static REST : GroupOrNote = GroupOrNote::SingleNote(Note::Rest);
 static ONCE : Times = Times(1);
 static TWICE: Times = Times(2);
 static THRICE : Times = Times(3);
+
 
 fn hit(input: &str) -> IResult<&str, Note> {
     map(char('x'), |_| { Note::Hit })(input)
