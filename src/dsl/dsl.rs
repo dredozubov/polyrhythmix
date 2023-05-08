@@ -9,7 +9,7 @@ use nom::branch::alt;
 
 use nom::combinator::{map, map_res};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BasicLength {
     Whole,
     Half,
@@ -20,26 +20,26 @@ pub enum BasicLength {
     SixtyFourth
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModdedLength {
     Plain(BasicLength),
     Dotted(BasicLength)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Length {
     Simple(ModdedLength),
     Tied(ModdedLength, ModdedLength),
     Triplet(ModdedLength)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Note {
     Hit,
     Rest
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Times(pub u16);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,38 +49,76 @@ pub enum GroupOrNote {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Group { notes: Vec<GroupOrNote>, length: Length, times: Times }
+pub struct Group {
+    pub notes: Vec<GroupOrNote>,
+    pub length: Length,
+    pub times: Times
+}
 
-static WHOLE : Length = Length::Simple(ModdedLength::Plain(BasicLength::Whole));
-static HALF : Length = Length::Simple(ModdedLength::Plain(BasicLength::Half));
-static FOURTH : Length = Length::Simple(ModdedLength::Plain(BasicLength::Fourth));
-static EIGHTH : Length = Length::Simple(ModdedLength::Plain(BasicLength::Eighth));
-static SIXTEENTH : Length = Length::Simple(ModdedLength::Plain(BasicLength::Sixteenth));
-static THIRTY_SECOND : Length = Length::Simple(ModdedLength::Plain(BasicLength::ThirtySecond));
-static SIXTY_FOURTH : Length = Length::Simple(ModdedLength::Plain(BasicLength::SixtyFourth));
+impl std::ops::Deref for Group {
+    type Target = Vec<GroupOrNote>;
 
-static WHOLE_DOTTED_TRIPLET : Length = Length::Triplet(ModdedLength::Dotted(BasicLength::Whole));
-static HALF_DOTTED_TRIPLET : Length = Length::Triplet(ModdedLength::Dotted(BasicLength::Half));
-static FOURTH_DOTTED_TRIPLET : Length = Length::Triplet(ModdedLength::Dotted(BasicLength::Fourth));
-static EIGHTH_DOTTED_TRIPLET : Length = Length::Triplet(ModdedLength::Dotted(BasicLength::Eighth));
-static SIXTEENTH_DOTTED_TRIPLET : Length = Length::Triplet(ModdedLength::Dotted(BasicLength::Sixteenth));
-static THIRTY_SECOND_DOTTED_TRIPLET : Length = Length::Triplet(ModdedLength::Dotted(BasicLength::ThirtySecond));
-static SIXTY_FOURTH_DOTTED_TRIPLET : Length = Length::Triplet(ModdedLength::Dotted(BasicLength::SixtyFourth));
+    fn deref(&self) -> &Self::Target {
+        &self.notes
+    }
+}
 
-static WHOLE_TRIPLET : Length = Length::Triplet(ModdedLength::Plain(BasicLength::Whole));
-static HALF_TRIPLET : Length = Length::Triplet(ModdedLength::Plain(BasicLength::Half));
-static FOURTH_TRIPLET : Length = Length::Triplet(ModdedLength::Plain(BasicLength::Fourth));
-static EIGHTH_TRIPLET : Length = Length::Triplet(ModdedLength::Plain(BasicLength::Eighth));
-static SIXTEENTH_TRIPLET : Length = Length::Triplet(ModdedLength::Plain(BasicLength::Sixteenth));
-static THIRTY_SECOND_TRIPLET : Length = Length::Triplet(ModdedLength::Plain(BasicLength::ThirtySecond));
-static SIXTY_FOURTH_TRIPLET : Length = Length::Triplet(ModdedLength::Plain(BasicLength::SixtyFourth));
+#[allow(dead_code)]
+static WHOLE : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Whole));
+#[allow(dead_code)]
+static HALF : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Half));
+#[allow(dead_code)]
+static FOURTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Fourth));
+#[allow(dead_code)]
+static EIGHTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Eighth));
+#[allow(dead_code)]
+static SIXTEENTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Sixteenth));
+#[allow(dead_code)]
+static THIRTY_SECOND : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::ThirtySecond));
+#[allow(dead_code)]
+static SIXTY_FOURTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::SixtyFourth));
 
+#[allow(dead_code)]
+static WHOLE_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Whole));
+#[allow(dead_code)]
+static HALF_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Half));
+#[allow(dead_code)]
+static FOURTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Fourth));
+#[allow(dead_code)]
+static EIGHTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Eighth));
+#[allow(dead_code)]
+static SIXTEENTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Sixteenth));
+#[allow(dead_code)]
+static THIRTY_SECOND_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::ThirtySecond));
+#[allow(dead_code)]
+static SIXTY_FOURTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::SixtyFourth));
+
+#[allow(dead_code)]
+static WHOLE_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Whole));
+#[allow(dead_code)]
+static HALF_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Half));
+#[allow(dead_code)]
+static FOURTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Fourth));
+#[allow(dead_code)]
+static EIGHTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Eighth));
+#[allow(dead_code)]
+static SIXTEENTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Sixteenth));
+#[allow(dead_code)]
+static THIRTY_SECOND_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::ThirtySecond));
+#[allow(dead_code)]
+static SIXTY_FOURTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::SixtyFourth));
+
+#[allow(dead_code)]
 static HIT : GroupOrNote = GroupOrNote::SingleNote(Note::Hit);
+#[allow(dead_code)]
 static REST : GroupOrNote = GroupOrNote::SingleNote(Note::Rest);
 
-static ONCE : Times = Times(1);
-static TWICE: Times = Times(2);
-static THRICE : Times = Times(3);
+#[allow(dead_code)]
+static ONCE : &Times = &Times(1);
+#[allow(dead_code)]
+static TWICE: &Times = &Times(2);
+#[allow(dead_code)]
+static THRICE : &Times = &Times(3);
 
 
 fn hit(input: &str) -> IResult<&str, Note> {
@@ -104,7 +142,7 @@ fn length_basic(input: &str) -> IResult<&str, BasicLength> {
         Ok((r,16)) => Ok((r, BasicLength::Sixteenth)),
         Ok((r,32)) => Ok((r, BasicLength::ThirtySecond)),
         Ok((r, 64)) => Ok((r, BasicLength::SixtyFourth)),
-        Ok((r, i)) => {
+        Ok((r, _)) => {
             Err(Err::Error(nom::error::make_error(r, nom::error::ErrorKind::Fail)))
         },
         Err(e) => Err(e)
@@ -150,35 +188,35 @@ fn group_or_delimited_group(input: &str) -> IResult<&str, Group> {
   alt((delimited_group, group))(input)
 }
 
-fn groups(input: &str) -> IResult<&str, Vec<Group>> {
+pub fn groups(input: &str) -> IResult<&str, Vec<Group>> {
     many1(group_or_delimited_group)(input)
 }
 
 #[test]
 fn parse_length() {
-  assert_eq!(length("16"), Ok(("", SIXTEENTH.clone())));
+  assert_eq!(length("16"), Ok(("", *SIXTEENTH)));
   assert_eq!(length("8+16"), Ok(("", Length::Tied(ModdedLength::Plain(BasicLength::Eighth), ModdedLength::Plain(BasicLength::Sixteenth)))));
-  assert_eq!(length("8t"), Ok(("", EIGHTH_TRIPLET.clone())));
-  assert_eq!(length("4.t"), Ok(("", FOURTH_DOTTED_TRIPLET.clone())));
+  assert_eq!(length("8t"), Ok(("", *EIGHTH_TRIPLET)));
+  assert_eq!(length("4.t"), Ok(("", *FOURTH_DOTTED_TRIPLET)));
 }
 
 #[test]
 fn parse_group() {
-  assert_eq!(group("16x--x-"), Ok(("", Group { times: ONCE.clone(), notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: SIXTEENTH.clone()})));
-  assert_eq!(group("8txxx"), Ok(("", Group { times: ONCE.clone(), notes: vec![HIT.clone(), HIT.clone(), HIT.clone()], length: EIGHTH_TRIPLET.clone()})));
-  assert_eq!(group("16+32x-xx"), Ok(("", Group { times: ONCE.clone(), notes: vec![HIT.clone(), REST.clone(), HIT.clone(), HIT.clone()], length: Length::Tied(ModdedLength::Plain(BasicLength::Sixteenth), ModdedLength::Plain(BasicLength::ThirtySecond))})));
-  assert_eq!(group("3,16xx"), Ok(("", Group { times: THRICE.clone(), length: SIXTEENTH.clone(), notes: vec![HIT.clone(), HIT.clone()] })));
+  assert_eq!(group("16x--x-"), Ok(("", Group { times: *ONCE, notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: *SIXTEENTH})));
+  assert_eq!(group("8txxx"), Ok(("", Group { times: *ONCE, notes: vec![HIT.clone(), HIT.clone(), HIT.clone()], length: *EIGHTH_TRIPLET})));
+  assert_eq!(group("16+32x-xx"), Ok(("", Group { times: *ONCE, notes: vec![HIT.clone(), REST.clone(), HIT.clone(), HIT.clone()], length: Length::Tied(ModdedLength::Plain(BasicLength::Sixteenth), ModdedLength::Plain(BasicLength::ThirtySecond))})));
+  assert_eq!(group("3,16xx"), Ok(("", Group { times: *THRICE, length: *SIXTEENTH, notes: vec![HIT.clone(), HIT.clone()] })));
 }
 
 #[test]
 fn parse_delimited_group() {
-    assert_eq!(delimited_group("(3,16x--x-)"), Ok(("", Group { times: THRICE.clone(), notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: SIXTEENTH.clone()})));
+    assert_eq!(delimited_group("(3,16x--x-)"), Ok(("", Group { times: *THRICE, notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: *SIXTEENTH})));
 }
 
 #[test]
 fn parse_group_or_delimited_group() {
-    assert_eq!(group_or_delimited_group("(3,16x--x-)"), Ok(("", Group { times: THRICE.clone(), notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: SIXTEENTH.clone()})));
-    assert_eq!(group_or_delimited_group("16x--x-"), Ok(("", Group { times: ONCE.clone(), notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: SIXTEENTH.clone()})));
+    assert_eq!(group_or_delimited_group("(3,16x--x-)"), Ok(("", Group { times: *THRICE, notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: *SIXTEENTH})));
+    assert_eq!(group_or_delimited_group("16x--x-"), Ok(("", Group { times: *ONCE, notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: *SIXTEENTH})));
 }
 
 // “x” hit
