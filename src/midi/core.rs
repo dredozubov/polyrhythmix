@@ -1,34 +1,53 @@
 extern crate derive_more;
 use std::collections::HashMap;
+use std::ops::Add;
 
-use derive_more::{Mul, Add};
-use midly::{Smf, Header, live::LiveEvent, MidiMessage, num::u15, Track};
+use midly::{live::LiveEvent, num::u15, Header, MidiMessage, Smf, Track};
 
-use crate::dsl::dsl::{Group, Length, ModdedLength, BasicLength};
+use crate::dsl::dsl::{
+    group_or_delimited_group, groups, BasicLength, Group, Length, ModdedLength, Note, Times,
+};
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct FlatNote {
-    // measured in ticks (128th notes), so it's easy to align to a midi grid
-    length: u8
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Add, Mul)]
+// Typically used as number of ticks since the beginning of the track.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    derive_more::Add,
+    derive_more::Mul,
+    derive_more::Display,
+)]
 #[repr(transparent)]
 pub struct Tick(pub u128);
+
+#[test]
+fn test_add_tick() {
+    assert_eq!(Tick(2) + Tick(2), Tick(4));
+}
+
+// Delta in time since the last MIDI event, measured in Ticks.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, derive_more::Add, derive_more::Mul,
+)]
+#[repr(transparent)]
+pub struct Delta(pub u128);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EventType {
     NoteOn(Part),
     NoteOff(Part),
     Tempo(u8),
-    Signature(TimeSignature)
+    Signature(TimeSignature),
 }
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TimeSignature {
     pub numerator: u8,
-    pub denominator: BasicLength
+    pub denominator: BasicLength,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
@@ -36,20 +55,95 @@ pub enum Part {
     KickDrum,
     SnareDrum,
     HiHat,
-    CrashCymbal
+    CrashCymbal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Event {
-    tick: Tick,
-    event_type: EventType
+pub struct Event<T> {
+    tick: T,
+    event_type: EventType,
 }
 
-// Events are supposed to be sorted.
-pub type EventGrid = Vec<Event>;
+// Events are supposed to be sorted by T at all times.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct EventGrid<T> {
+    events: Vec<Event<T>>,
+    length: Tick,
+}
+
+impl<T: Add<Tick, Output = T> + Clone> Add for EventGrid<T> {
+    type Output = EventGrid<T>;
+
+    fn add(mut self, other: EventGrid<T>) -> EventGrid<T> {
+        let other_events: Vec<Event<T>> = other
+            .events
+            .into_iter()
+            .map(|mut e| {
+                e.tick = e.tick.clone() + self.length;
+                e
+            })
+            .collect();
+        self.events.extend(other_events);
+        self.length = self.length + other.length;
+        self
+    }
+}
+
+#[test]
+fn test_add_event_grid() {
+    let mut empty: EventGrid<Tick> = EventGrid::new();
+    let kick_on = Event {
+        tick: Tick(0),
+        event_type: EventType::NoteOn(Part::KickDrum),
+    };
+    let kick_off = Event {
+        tick: Tick(24),
+        event_type: EventType::NoteOff(Part::KickDrum),
+    };
+    let simple_grid = EventGrid {
+        events: vec![kick_on, kick_off],
+        length: Tick(48),
+    };
+    assert_eq!(empty.clone() + empty.clone(), empty);
+    assert_eq!(simple_grid.clone() + empty.clone(), simple_grid);
+    assert_eq!(empty.clone() + simple_grid.clone(), simple_grid);
+    assert_eq!(
+        simple_grid.clone() + simple_grid.clone(),
+        EventGrid {
+            events: vec![
+                Event {
+                    tick: Tick(0),
+                    event_type: EventType::NoteOn(Part::KickDrum)
+                },
+                Event {
+                    tick: Tick(24),
+                    event_type: EventType::NoteOff(Part::KickDrum)
+                },
+                Event {
+                    tick: Tick(48),
+                    event_type: EventType::NoteOn(Part::KickDrum)
+                },
+                Event {
+                    tick: Tick(72),
+                    event_type: EventType::NoteOff(Part::KickDrum)
+                }
+            ],
+            length: Tick(96)
+        }
+    );
+}
+
+impl<T> EventGrid<T> {
+    fn new() -> Self {
+        EventGrid {
+            events: Vec::new(),
+            length: Tick(0),
+        }
+    }
+}
 
 #[allow(dead_code)]
-static TICKS_PER_QUARTER_NOTE : u16 = 48;
+static TICKS_PER_QUARTER_NOTE: u16 = 48;
 
 fn basic_length_to_ticks(basic_length: BasicLength) -> Tick {
     match basic_length {
@@ -77,7 +171,9 @@ fn modded_length_to_ticks(modded_length: ModdedLength) -> Tick {
 fn length_to_ticks(length: Length) -> Tick {
     match length {
         Length::Simple(mlen) => modded_length_to_ticks(mlen),
-        Length::Tied(first, second) => modded_length_to_ticks(first) + modded_length_to_ticks(second),
+        Length::Tied(first, second) => {
+            modded_length_to_ticks(first) + modded_length_to_ticks(second)
+        }
         Length::Triplet(mlen) => {
             let Tick(straight) = modded_length_to_ticks(mlen);
             let triplet = straight * 2 / 3;
@@ -86,53 +182,172 @@ fn length_to_ticks(length: Length) -> Tick {
     }
 }
 
-fn flatten_group(Group { notes, length, times }: &Group, part: Part, start: &mut Tick, grid: &mut EventGrid) -> EventGrid {
-    let mut time = start;
+// Returns an EventGrid and a total length. Length is needed as a group can end with rests that are not in the grid,
+// and we need it to cycle the group.
+fn flatten_group(
+    Group {
+        notes,
+        length,
+        times,
+    }: &Group,
+    part: Part,
+    start: &mut Tick,
+) -> EventGrid<Tick> {
+    let time = start;
     let note_length = length_to_ticks(*length);
-    let mut grid = Vec::new();
-    for entry in notes.iter() { |entry|
+    let mut grid = EventGrid::new();
+    notes.iter().for_each(|entry| {
         match entry {
             crate::dsl::dsl::GroupOrNote::SingleGroup(group) => {
-                flatten_group(&group, part, time , &mut grid).repeat(times.0 as usize);
-            },
-            crate::dsl::dsl::GroupOrNote::SingleNote(Rest) => { *time = *time + note_length; },
-            crate::dsl::dsl::GroupOrNote::SingleNote(Hit) => {
+                let mut eg = flatten_group(&group, part, time);
+                grid.events.append(&mut eg.events);
+                grid.length = grid.length + eg.length;
+            }
+            crate::dsl::dsl::GroupOrNote::SingleNote(Note::Rest) => {
+                let rest_end = *time + note_length;
+                *time = rest_end;
+                grid.length = rest_end;
+            }
+            crate::dsl::dsl::GroupOrNote::SingleNote(Note::Hit) => {
                 let note_end = *time + note_length;
-                let note_on = Event { tick: *time, event_type: EventType::NoteOn(part) };
-                let note_off = Event { tick: note_end, event_type: EventType::NoteOff(part) };
-                grid.push(note_on);
-                grid.push(note_off);
+                let note_on = Event {
+                    tick: *time,
+                    event_type: EventType::NoteOn(part),
+                };
+                let note_off = Event {
+                    tick: note_end,
+                    event_type: EventType::NoteOff(part),
+                };
+                grid.events.push(note_on);
+                grid.events.push(note_off);
+                grid.length = note_end;
                 *time = note_end;
-            },
+            }
         };
+    });
+    cycle_grid(grid, *times)
+}
+
+#[test]
+fn test_flatten_group() {
+    let empty: EventGrid<Tick> = EventGrid::new();
+    assert_eq!(
+        flatten_group(
+            &group_or_delimited_group("(2,8x--)").unwrap().1,
+            Part::KickDrum,
+            &mut Tick(0)
+        ),
+        EventGrid {
+            events: vec![
+                Event {
+                    tick: Tick(0),
+                    event_type: EventType::NoteOn(Part::KickDrum)
+                },
+                Event {
+                    tick: Tick(24),
+                    event_type: EventType::NoteOff(Part::KickDrum)
+                },
+                Event {
+                    tick: Tick(72),
+                    event_type: EventType::NoteOn(Part::KickDrum)
+                },
+                Event {
+                    tick: Tick(96),
+                    event_type: EventType::NoteOff(Part::KickDrum)
+                }
+            ],
+            length: Tick(144)
+        }
+    );
+}
+
+fn cycle_grid(event_grid: EventGrid<Tick>, times: Times) -> EventGrid<Tick> {
+    let mut grid = EventGrid::new();
+    for i in 1..(times.0 + 1) {
+        grid = grid + event_grid.clone();
     }
     grid
 }
 
-fn flatten_groups(part: Part, groups: Vec<Group>) -> EventGrid {
-    let mut time : Tick = Tick(0);
-    let mut grid : EventGrid = Vec::new();
+#[test]
+fn test_cycle_grid() {
+    let empty: EventGrid<Tick> = EventGrid::new();
+    assert_eq!(cycle_grid(EventGrid::new(), Times(2)), empty);
+    let kick_on = Event {
+        tick: Tick(0),
+        event_type: EventType::NoteOn(Part::KickDrum),
+    };
+    let kick_off = Event {
+        tick: Tick(24),
+        event_type: EventType::NoteOff(Part::KickDrum),
+    };
+    let simple_grid = EventGrid {
+        events: vec![kick_on, kick_off],
+        length: Tick(48),
+    };
+    assert_eq!(cycle_grid(simple_grid.clone(), Times(0)), empty);
+    assert_eq!(cycle_grid(simple_grid.clone(), Times(1)), simple_grid);
+    assert_eq!(
+        cycle_grid(simple_grid.clone(), Times(2)),
+        EventGrid {
+            events: vec![
+                Event {
+                    tick: Tick(0),
+                    event_type: EventType::NoteOn(Part::KickDrum)
+                },
+                Event {
+                    tick: Tick(24),
+                    event_type: EventType::NoteOff(Part::KickDrum)
+                },
+                Event {
+                    tick: Tick(48),
+                    event_type: EventType::NoteOn(Part::KickDrum)
+                },
+                Event {
+                    tick: Tick(72),
+                    event_type: EventType::NoteOff(Part::KickDrum)
+                }
+            ],
+            length: Tick(96)
+        }
+    );
+}
+
+fn flatten_groups(part: Part, groups: Vec<Group>) -> EventGrid<Tick> {
+    let mut time: Tick = Tick(0);
+    let mut grid: EventGrid<Tick> = EventGrid::new();
     groups.iter().for_each(|group| {
-        flatten_group(group, part, &mut time, &mut grid);
+        grid = grid.clone() + flatten_group(group, part, &mut time);
     });
     grid
 }
 
-fn combine_event_grids<'a>(a: &'a mut EventGrid, b : &'a mut EventGrid) -> &'a mut EventGrid {
-    a.append(b);
-    a.sort_by(|e1, e2| { e1.tick.cmp(&e2.tick)} );
-    a
+// Combines multiple sorted EventGrid<Tick>
+fn combine_event_grids<'a, T>(a: EventGrid<T>, b : EventGrid<T>) -> EventGrid<T>
+where
+    T: Ord,
+    EventGrid<T>: Add<EventGrid<T>, Output = EventGrid<T>>
+{
+    let mut all_events = a + b;
+    all_events.events.sort_by(|e1, e2| { e1.tick.cmp(&e2.tick)} );
+    all_events
 }
 
-fn merge_event_grids(mut eg: Vec<EventGrid>) -> EventGrid {
+// Combines a vector of sorted EventGrid<Tick>
+fn merge_event_grids<T>(mut eg: Vec<EventGrid<T>>) -> EventGrid<T>
+where
+    T: Ord,
+    EventGrid<T>: Add<EventGrid<T>, Output = EventGrid<T>> + Clone
+{
     let first = eg.pop().unwrap();
-    eg.iter_mut().fold(first, |mut acc, next| {
-        combine_event_grids(&mut acc, next);
+    eg.iter().fold(first, |mut acc, next| {
+        acc = combine_event_grids(acc, (*next).clone());
         acc
     })
 }
 
-fn flatten_and_merge(groups: HashMap<Part, Vec<Group>>) -> EventGrid {
+// Returns time as a number of ticks from beginning, has to be turned into the midi delta-time.
+fn flatten_and_merge(groups: HashMap<Part, Vec<Group>>) -> EventGrid<Tick> {
     let mut eg = Vec::new();
     for (part, group) in groups {
         eg.push(flatten_groups(part, group))
@@ -142,10 +357,20 @@ fn flatten_and_merge(groups: HashMap<Part, Vec<Group>>) -> EventGrid {
 
 // The length of a beat is not standard, so in order to fully describe the length of a MIDI tick the MetaMessage::Tempo event should be present.
 fn create_smf<'a>(groups: HashMap<Part, Vec<Group>>) -> Smf<'a> {
-    let tracks = vec![]; //create_tracks(groups); // FIXME
-    // https://majicdesigns.github.io/MD_MIDIFile/page_timing.html
-    // says " If it is not specified the MIDI default is 48 ticks per quarter note."
-    // As it's required in `Header`, let's use the same value.
+    let tracks = vec![]; // create_tracks(groups); // FIXME
+                         // https://majicdesigns.github.io/MD_MIDIFile/page_timing.html
+                         // says " If it is not specified the MIDI default is 48 ticks per quarter note."
+                         // As it's required in `Header`, let's use the same value.
     let metrical = midly::Timing::Metrical(u15::new(TICKS_PER_QUARTER_NOTE));
-    Smf { header: Header { format: midly::Format::Parallel, timing: metrical }, tracks: tracks }
+    Smf {
+        header: Header {
+            format: midly::Format::Parallel,
+            timing: metrical,
+        },
+        tracks: tracks,
+    }
 }
+
+// fn create_tracks(groups: HashMap<Part, Vec<Group>>) -> Vec<Vec<midly::TrackEvent>> {
+//     todo!()
+// }

@@ -36,9 +36,7 @@ struct Cli {
     output: Option<String>
 }
 
-
-
-fn part_to_instrument(part: Part) -> String {
+fn part_to_string(part: Part) -> String {
     match part {
         Part::KickDrum => String::from("Kick Drum"),
         Part::SnareDrum => String::from("Snare Drum"),
@@ -54,7 +52,7 @@ fn validate_and_parse_part(cli: Option<String>, part: Part, patterns: &mut HashM
             match dsl::groups(pattern.as_str()) {
                 Ok((_, group)) => { patterns.insert(part, group); },
                 Err(e) => { 
-                    println!("{} pattern is malformed.", part_to_instrument(part));
+                    println!("{} pattern is malformed.", part_to_string(part));
                     exit(1)
                 }
             }    
@@ -77,6 +75,7 @@ fn main() {
                 validate_and_parse_part(snare, Part::SnareDrum, &mut drum_patterns);
                 validate_and_parse_part(hihat, Part::HiHat, &mut drum_patterns);
                 validate_and_parse_part(crash, Part::CrashCymbal, &mut drum_patterns);
+
             }
         }
     }

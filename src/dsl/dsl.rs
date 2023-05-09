@@ -184,7 +184,7 @@ fn delimited_group(input: &str) -> IResult<&str, Group> {
     delimited(char('('), group, char(')'))(input)
 }
 
-fn group_or_delimited_group(input: &str) -> IResult<&str, Group> {
+pub fn group_or_delimited_group(input: &str) -> IResult<&str, Group> {
   alt((delimited_group, group))(input)
 }
 
