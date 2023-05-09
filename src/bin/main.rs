@@ -51,9 +51,8 @@ fn validate_and_parse_part(cli: Option<String>, part: Part, patterns: &mut HashM
         Some(pattern) => {
             match dsl::groups(pattern.as_str()) {
                 Ok((_, group)) => { patterns.insert(part, group); },
-                Err(e) => { 
-                    println!("{} pattern is malformed.", part_to_string(part));
-                    exit(1)
+                Err(_) => { 
+                    panic!("{} pattern is malformed.", part_to_string(part))
                 }
             }    
         }

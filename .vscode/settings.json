@@ -10,5 +10,6 @@
         "./Cargo.toml",
         "./Cargo.toml",
         "./Cargo.toml"
-    ]
+    ],
+    "docwriter.style": "RustDoc"
 }

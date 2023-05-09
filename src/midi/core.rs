@@ -5,7 +5,7 @@ use std::ops::Add;
 use midly::{live::LiveEvent, num::u15, Header, MidiMessage, Smf, Track};
 
 use crate::dsl::dsl::{
-    group_or_delimited_group, groups, BasicLength, Group, Length, ModdedLength, Note, Times,
+    group_or_delimited_group, groups, BasicLength, Length, Group, ModdedLength, Note, Times,
 };
 
 // Typically used as number of ticks since the beginning of the track.
@@ -18,6 +18,7 @@ use crate::dsl::dsl::{
     PartialOrd,
     Ord,
     derive_more::Add,
+    derive_more::Sub,
     derive_more::Mul,
     derive_more::Display,
 )]
@@ -142,48 +143,85 @@ impl<T> EventGrid<T> {
     }
 }
 
+impl EventGrid<Tick> {
+    /// Converts a sorted `EventGrid<Tick>`
+    fn to_delta(&self) -> EventGrid<Delta> {
+        let mut time = Tick(0);
+        let mut delta_grid = EventGrid::new();
+        for e in &self.events {
+            let delta = e.tick - time;
+            time = time + delta;
+            delta_grid.events.push(Event { tick: Delta(delta.0), event_type: e.event_type })
+        }
+        delta_grid
+    }
+}
+
 #[allow(dead_code)]
 static TICKS_PER_QUARTER_NOTE: u16 = 48;
 
-fn basic_length_to_ticks(basic_length: BasicLength) -> Tick {
-    match basic_length {
-        BasicLength::Whole => Tick((TICKS_PER_QUARTER_NOTE * 4) as u128),
-        BasicLength::Half => Tick((TICKS_PER_QUARTER_NOTE * 2) as u128),
-        BasicLength::Fourth => Tick(TICKS_PER_QUARTER_NOTE as u128),
-        BasicLength::Eighth => Tick((TICKS_PER_QUARTER_NOTE / 2) as u128),
-        BasicLength::Sixteenth => Tick((TICKS_PER_QUARTER_NOTE / 4) as u128),
-        BasicLength::ThirtySecond => Tick((TICKS_PER_QUARTER_NOTE / 8) as u128),
-        BasicLength::SixtyFourth => Tick((TICKS_PER_QUARTER_NOTE / 16) as u128),
-    }
-}
-
-fn modded_length_to_ticks(modded_length: ModdedLength) -> Tick {
-    match modded_length {
-        ModdedLength::Plain(blen) => basic_length_to_ticks(blen),
-        ModdedLength::Dotted(blen) => {
-            let Tick(whole) = basic_length_to_ticks(blen);
-            let half = whole / 2;
-            Tick(whole + half)
+impl BasicLength {
+    /// `BasicLength` to MIDI Ticks
+    fn to_ticks(&self) -> Tick {
+        match self {
+            BasicLength::Whole => Tick((TICKS_PER_QUARTER_NOTE * 4) as u128),
+            BasicLength::Half => Tick((TICKS_PER_QUARTER_NOTE * 2) as u128),
+            BasicLength::Fourth => Tick(TICKS_PER_QUARTER_NOTE as u128),
+            BasicLength::Eighth => Tick((TICKS_PER_QUARTER_NOTE / 2) as u128),
+            BasicLength::Sixteenth => Tick((TICKS_PER_QUARTER_NOTE / 4) as u128),
+            BasicLength::ThirtySecond => Tick((TICKS_PER_QUARTER_NOTE / 8) as u128),
+            BasicLength::SixtyFourth => Tick((TICKS_PER_QUARTER_NOTE / 16) as u128),
         }
     }
 }
 
-fn length_to_ticks(length: Length) -> Tick {
-    match length {
-        Length::Simple(mlen) => modded_length_to_ticks(mlen),
-        Length::Tied(first, second) => {
-            modded_length_to_ticks(first) + modded_length_to_ticks(second)
-        }
-        Length::Triplet(mlen) => {
-            let Tick(straight) = modded_length_to_ticks(mlen);
-            let triplet = straight * 2 / 3;
-            Tick(triplet)
+impl ModdedLength {
+    /// `ModdedLength` to MIDI Ticks
+    fn to_ticks(&self) -> Tick {
+        match self {
+            ModdedLength::Plain(blen) => blen.to_ticks(),
+            ModdedLength::Dotted(blen) => {
+                let Tick(whole) = blen.to_ticks();
+                let half = whole / 2;
+                Tick(whole + half)
+            }
         }
     }
 }
 
-// Returns an EventGrid and a total length. Length is needed as a group can end with rests that are not in the grid,
-// and we need it to cycle the group.
+impl Length {
+    /// Note length to MIDI ticks
+    /// The function converts a musical note length to ticks, accounting for simple notes, tied notes, and
+    /// triplets.
+    /// 
+    /// Arguments:
+    /// 
+    /// * `length`: `length` is a variable of type `Length`, which is an enum that represents different
+    /// types of musical note lengths. The function `length_to_ticks` takes a `Length` as input and returns
+    /// a `Tick`, which is a struct representing the number of ticks (a unit of time in music
+    /// 
+    /// Returns:
+    /// 
+    /// The function `length_to_ticks` takes a `Length` enum as input and returns a `Tick` value. The `Tick`
+    /// value represents the duration of the note in ticks, which is a unit of time used in music notation
+    /// software.
+    fn to_ticks(&self) -> Tick {
+        match self {
+            Length::Simple(mlen) => mlen.to_ticks(),
+            Length::Tied(first, second) => {
+                first.to_ticks() + second.to_ticks()
+            }
+            Length::Triplet(mlen) => {
+                let Tick(straight) = mlen.to_ticks();
+                let triplet = straight * 2 / 3;
+                Tick(triplet)
+            }
+        }
+    }
+}
+
+/// Returns an EventGrid and a total length. Length is needed as a group can end with rests that are not in the grid,
+/// and we need it to cycle the group.
 fn flatten_group(
     Group {
         notes,
@@ -194,7 +232,7 @@ fn flatten_group(
     start: &mut Tick,
 ) -> EventGrid<Tick> {
     let time = start;
-    let note_length = length_to_ticks(*length);
+    let note_length = length.to_ticks();
     let mut grid = EventGrid::new();
     notes.iter().for_each(|entry| {
         match entry {
@@ -230,7 +268,6 @@ fn flatten_group(
 
 #[test]
 fn test_flatten_group() {
-    let empty: EventGrid<Tick> = EventGrid::new();
     assert_eq!(
         flatten_group(
             &group_or_delimited_group("(2,8x--)").unwrap().1,
@@ -263,7 +300,7 @@ fn test_flatten_group() {
 
 fn cycle_grid(event_grid: EventGrid<Tick>, times: Times) -> EventGrid<Tick> {
     let mut grid = EventGrid::new();
-    for i in 1..(times.0 + 1) {
+    for _ in 1..(times.0 + 1) {
         grid = grid + event_grid.clone();
     }
     grid
@@ -356,7 +393,7 @@ fn flatten_and_merge(groups: HashMap<Part, Vec<Group>>) -> EventGrid<Tick> {
 }
 
 // The length of a beat is not standard, so in order to fully describe the length of a MIDI tick the MetaMessage::Tempo event should be present.
-fn create_smf<'a>(groups: HashMap<Part, Vec<Group>>) -> Smf<'a> {
+pub fn create_smf<'a>(groups: HashMap<Part, Vec<Group>>) -> Smf<'a> {
     let tracks = vec![]; // create_tracks(groups); // FIXME
                          // https://majicdesigns.github.io/MD_MIDIFile/page_timing.html
                          // says " If it is not specified the MIDI default is 48 ticks per quarter note."
@@ -371,6 +408,7 @@ fn create_smf<'a>(groups: HashMap<Part, Vec<Group>>) -> Smf<'a> {
     }
 }
 
-// fn create_tracks(groups: HashMap<Part, Vec<Group>>) -> Vec<Vec<midly::TrackEvent>> {
-//     todo!()
-// }
+/// Translates drum parts to a single MIDI track.
+fn create_tracks<'a>(parts_and_groups: HashMap<Part, Vec<Group>>) -> Vec<Vec<midly::TrackEvent<'a>>> {
+    let event_grid = flatten_and_merge(parts_and_groups).to_delta();
+}
