@@ -1,11 +1,12 @@
 extern crate derive_more;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ops::Add;
 
 use midly::{live::LiveEvent, num::u15, Header, MidiMessage, Smf, Track};
 
 use crate::dsl::dsl::{
-    group_or_delimited_group, groups, BasicLength, Length, Group, ModdedLength, Note, Times,
+    group_or_delimited_group, groups, BasicLength, Group, Length, ModdedLength, Note, Times,
 };
 
 // Typically used as number of ticks since the beginning of the track.
@@ -51,12 +52,134 @@ pub struct TimeSignature {
     pub denominator: BasicLength,
 }
 
+#[test]
+fn test_cmp_time_signature() {
+    let three_sixteenth = TimeSignature {
+        numerator: 3,
+        denominator: BasicLength::Sixteenth,
+    };
+    let four_fourth = TimeSignature {
+        numerator: 4,
+        denominator: BasicLength::Fourth,
+    };
+    let two_secondth = TimeSignature {
+        numerator: 2,
+        denominator: BasicLength::Half,
+    };
+    assert_eq!(three_sixteenth.cmp(&four_fourth), Ordering::Less);
+    // weird, but not worth changing
+    // May implement a new type Ord if it needs to be Equal.
+    assert_eq!(four_fourth.cmp(&two_secondth), Ordering::Greater);
+}
+
+impl TimeSignature {
+    /// Checks if these two signatures converges for the next 200 bars.
+    fn converges_with(&self, other: TimeSignature) -> Result<(u32, TimeSignature), String> {
+        let d: u32 = std::cmp::max(self.denominator, other.denominator)
+            .to_u8()
+            .into();
+        let d1: u32 = self.denominator.to_u8().into();
+        let d2: u32 = other.denominator.to_u8().into();
+        let coef1 = d / d1;
+        let coef2 = d / d2;
+        let num1: u32 = coef1 * (self.numerator as u32);
+        let num2: u32 = coef2 * (other.numerator as u32);
+        let greater_time_signature = self.max(&other);
+        let f = |max, min| {
+            let mut res = Err(format!("Not converges over 1000 bars of {:?}", other));
+            for i in 1..1000 {
+                if (max * i) % min == 0 {
+                    res = Ok((i, *greater_time_signature));
+                    break;
+                }
+            }
+            res
+        };
+        match num1.cmp(&num2) {
+            std::cmp::Ordering::Less => f(num2, num1),
+            std::cmp::Ordering::Equal => Ok((1, *greater_time_signature)),
+            std::cmp::Ordering::Greater => f(num1, num2),
+        }
+    }
+
+    fn converges(
+        &self,
+        time_signatures: Vec<TimeSignature>,
+    ) -> Result<(u32, TimeSignature), String> {
+        time_signatures
+            .iter()
+            .try_fold((1, *self), |(bars, ts), x| match ts.converges_with(*x) {
+                Ok((new_bars, greater_signature)) => {
+                    if new_bars > bars {
+                        if new_bars % bars == 0 {
+                            Ok((new_bars, greater_signature))
+                        } else {
+                            Err(format!("{:?} don't converge with {:?}", self, x))
+                        }
+                    } else {
+                        if bars % new_bars == 0 {
+                            Ok((bars, greater_signature))
+                        } else {
+                            Err(format!("{:?} don't converge with {:?}", self, x))
+                        }
+                    }
+                }
+                Err(e) => Err(e),
+            })
+    }
+}
+
+#[test]
+fn test_converges_with() {
+    let three_sixteenth = TimeSignature {
+        numerator: 3,
+        denominator: BasicLength::Sixteenth,
+    };
+    let four_fourth = TimeSignature {
+        numerator: 4,
+        denominator: BasicLength::Fourth,
+    };
+    assert_eq!(
+        three_sixteenth.converges_with(four_fourth),
+        Ok((3, four_fourth))
+    );
+}
+
+#[test]
+fn test_converges() {
+    let three_sixteenth = TimeSignature {
+        numerator: 3,
+        denominator: BasicLength::Sixteenth,
+    };
+    let four_fourth = TimeSignature {
+        numerator: 4,
+        denominator: BasicLength::Fourth,
+    };
+    let three_fourth = TimeSignature {
+        numerator: 3,
+        denominator: BasicLength::Fourth
+    };
+    assert_eq!(three_sixteenth.converges(vec![four_fourth, three_fourth]), Ok((3, four_fourth)));
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
 pub enum Part {
     KickDrum,
     SnareDrum,
     HiHat,
     CrashCymbal,
+}
+
+impl Part {
+    // https://computermusicresource.com/GM.Percussion.KeyMap.html
+    fn to_midi_key(&self) -> u8 {
+        match self {
+            Part::KickDrum => 36,
+            Part::SnareDrum => 38,
+            Part::HiHat => 46,
+            Part::CrashCymbal => 49,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -151,7 +274,10 @@ impl EventGrid<Tick> {
         for e in &self.events {
             let delta = e.tick - time;
             time = time + delta;
-            delta_grid.events.push(Event { tick: Delta(delta.0), event_type: e.event_type })
+            delta_grid.events.push(Event {
+                tick: Delta(delta.0),
+                event_type: e.event_type,
+            })
         }
         delta_grid
     }
@@ -171,6 +297,18 @@ impl BasicLength {
             BasicLength::Sixteenth => Tick((TICKS_PER_QUARTER_NOTE / 4) as u128),
             BasicLength::ThirtySecond => Tick((TICKS_PER_QUARTER_NOTE / 8) as u128),
             BasicLength::SixtyFourth => Tick((TICKS_PER_QUARTER_NOTE / 16) as u128),
+        }
+    }
+
+    fn to_u8(&self) -> u8 {
+        match self {
+            BasicLength::Whole => 1,
+            BasicLength::Half => 2,
+            BasicLength::Fourth => 4,
+            BasicLength::Eighth => 8,
+            BasicLength::Sixteenth => 16,
+            BasicLength::ThirtySecond => 32,
+            BasicLength::SixtyFourth => 64,
         }
     }
 }
@@ -193,24 +331,22 @@ impl Length {
     /// Note length to MIDI ticks
     /// The function converts a musical note length to ticks, accounting for simple notes, tied notes, and
     /// triplets.
-    /// 
+    ///
     /// Arguments:
-    /// 
+    ///
     /// * `length`: `length` is a variable of type `Length`, which is an enum that represents different
     /// types of musical note lengths. The function `length_to_ticks` takes a `Length` as input and returns
     /// a `Tick`, which is a struct representing the number of ticks (a unit of time in music
-    /// 
+    ///
     /// Returns:
-    /// 
+    ///
     /// The function `length_to_ticks` takes a `Length` enum as input and returns a `Tick` value. The `Tick`
     /// value represents the duration of the note in ticks, which is a unit of time used in music notation
     /// software.
     fn to_ticks(&self) -> Tick {
         match self {
             Length::Simple(mlen) => mlen.to_ticks(),
-            Length::Tied(first, second) => {
-                first.to_ticks() + second.to_ticks()
-            }
+            Length::Tied(first, second) => first.to_ticks() + second.to_ticks(),
             Length::Triplet(mlen) => {
                 let Tick(straight) = mlen.to_ticks();
                 let triplet = straight * 2 / 3;
@@ -360,13 +496,13 @@ fn flatten_groups(part: Part, groups: Vec<Group>) -> EventGrid<Tick> {
 }
 
 // Combines multiple sorted EventGrid<Tick>
-fn combine_event_grids<'a, T>(a: EventGrid<T>, b : EventGrid<T>) -> EventGrid<T>
+fn combine_event_grids<'a, T>(a: EventGrid<T>, b: EventGrid<T>) -> EventGrid<T>
 where
     T: Ord,
-    EventGrid<T>: Add<EventGrid<T>, Output = EventGrid<T>>
+    EventGrid<T>: Add<EventGrid<T>, Output = EventGrid<T>>,
 {
     let mut all_events = a + b;
-    all_events.events.sort_by(|e1, e2| { e1.tick.cmp(&e2.tick)} );
+    all_events.events.sort_by(|e1, e2| e1.tick.cmp(&e2.tick));
     all_events
 }
 
@@ -374,7 +510,7 @@ where
 fn merge_event_grids<T>(mut eg: Vec<EventGrid<T>>) -> EventGrid<T>
 where
     T: Ord,
-    EventGrid<T>: Add<EventGrid<T>, Output = EventGrid<T>> + Clone
+    EventGrid<T>: Add<EventGrid<T>, Output = EventGrid<T>> + Clone,
 {
     let first = eg.pop().unwrap();
     eg.iter().fold(first, |mut acc, next| {
@@ -409,6 +545,10 @@ pub fn create_smf<'a>(groups: HashMap<Part, Vec<Group>>) -> Smf<'a> {
 }
 
 /// Translates drum parts to a single MIDI track.
-fn create_tracks<'a>(parts_and_groups: HashMap<Part, Vec<Group>>) -> Vec<Vec<midly::TrackEvent<'a>>> {
+fn create_tracks<'a>(
+    parts_and_groups: HashMap<Part, Vec<Group>>,
+) -> Vec<Vec<midly::TrackEvent<'a>>> {
     let event_grid = flatten_and_merge(parts_and_groups).to_delta();
+    let drums = Vec::new();
+    vec![drums]
 }
