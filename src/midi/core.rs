@@ -1,7 +1,7 @@
 extern crate derive_more;
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::ops::Add;
+use std::ops::{Add, Mul};
 
 use midly::{live::LiveEvent, num::u15, Header, MidiMessage, Smf, Track};
 
@@ -52,6 +52,19 @@ pub struct TimeSignature {
     pub denominator: BasicLength,
 }
 
+impl TimeSignature {
+    pub fn new(numerator: u8, denominator: BasicLength) -> Self {
+        Self { numerator, denominator }
+    }
+}
+
+impl std::ops::Mul<u8> for TimeSignature {
+    type Output = TimeSignature;
+    fn mul(self, rhs: u8) -> TimeSignature {
+        TimeSignature { numerator: self.numerator * rhs as u8, denominator: self.denominator }
+    }
+}
+
 #[test]
 fn test_cmp_time_signature() {
     let three_sixteenth = TimeSignature {
@@ -73,6 +86,8 @@ fn test_cmp_time_signature() {
 }
 
 impl TimeSignature {
+
+
     /// Checks if these two signatures converges for the next 200 bars.
     fn converges_with(&self, other: TimeSignature) -> Result<(u32, TimeSignature), String> {
         let d: u32 = std::cmp::max(self.denominator, other.denominator)

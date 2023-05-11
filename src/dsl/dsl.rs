@@ -1,5 +1,6 @@
 use std::str;
 use std::vec::Vec;
+use std::ops::{Add, Mul};
 
 pub use nom::character::complete::{char, digit1};
 use nom::multi::many1;
@@ -20,6 +21,66 @@ pub enum BasicLength {
     SixtyFourth
 }
 
+impl BasicLength {
+    /// Unsafe method, so it should only be used from `add`.
+    fn from_num(n: u16) -> Self {
+        match n {
+            1 => BasicLength::SixtyFourth,
+            2 => BasicLength::ThirtySecond,
+            4 => BasicLength::Sixteenth,
+            8 => BasicLength::Eighth,
+            16 => BasicLength::Fourth,
+            32 => BasicLength::Half,
+            64 => BasicLength::Whole,
+            e => panic!("{} is not a num BasicLength can be constructed from", e)
+        }
+    }
+}
+
+impl Add<BasicLength> for BasicLength {
+    type Output = Length;
+
+    fn add(self, rhs: BasicLength) -> Length {
+        let f = |x| match x {
+            BasicLength::Whole => 64,
+            BasicLength::Half => 32,
+            BasicLength::Fourth => 16,
+            BasicLength::Eighth => 8,
+            BasicLength::Sixteenth => 4,
+            BasicLength::ThirtySecond => 2,
+            BasicLength::SixtyFourth => 1,
+        };
+        if self == rhs && self != BasicLength::Whole {
+            Length::Simple(ModdedLength::Plain(BasicLength::from_num(f(self) * 2)))
+        } else {
+            let n1 : u16 = f(self);
+            let n2 = f(rhs);
+            let total = n1 + n2;
+            
+            if total > 64 {
+                Length::Tied(ModdedLength::Plain(BasicLength::Whole), ModdedLength::Plain(BasicLength::from_num(total - 64)))
+            } else if total > 32 {
+                Length::Tied(ModdedLength::Plain(BasicLength::Half), ModdedLength::Plain(BasicLength::from_num(total - 32)))
+            } else if total > 16 {
+                Length::Tied(ModdedLength::Plain(BasicLength::Fourth), ModdedLength::Plain(BasicLength::from_num(total - 16)))
+            } else if total > 8 {
+                Length::Tied(ModdedLength::Plain(BasicLength::Eighth), ModdedLength::Plain(BasicLength::from_num(total - 8)))
+            } else if total > 4 {
+                Length::Tied(ModdedLength::Plain(BasicLength::Fourth), ModdedLength::Plain(BasicLength::from_num(total - 4)))
+            } else {
+                Length::Tied(ModdedLength::Plain(BasicLength::Half), ModdedLength::Plain(BasicLength::from_num(total - 2)))
+            }
+        }
+    }
+}
+
+#[test]
+fn test_add_basic_length() {
+    assert_eq!(BasicLength::Half + BasicLength::Half, Length::Simple(ModdedLength::Plain(BasicLength::Whole)));
+    assert_eq!(BasicLength::Whole + BasicLength::Whole, Length::Tied(ModdedLength::Plain(BasicLength::Whole), ModdedLength::Plain(BasicLength::Whole)));
+    assert_eq!(BasicLength::Half + BasicLength::SixtyFourth, Length::Tied(ModdedLength::Plain(BasicLength::Half), ModdedLength::Plain(BasicLength::SixtyFourth)));
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModdedLength {
     Plain(BasicLength),
@@ -32,6 +93,36 @@ pub enum Length {
     Tied(ModdedLength, ModdedLength),
     Triplet(ModdedLength)
 }
+
+// impl Length {
+//     fn from_group(group: Group) -> Self {
+//         let mut numerator = 0;
+//         for x in group.notes {
+//             match x {
+//                 crate::dsl::dsl::GroupOrNote::SingleGroup(g) => {
+//                     todo!()
+//                 },
+//                 crate::dsl::dsl::GroupOrNote::SingleNote(_) => {
+//                     numerator = numerator + 1;
+//                 },
+//             }
+//         }
+//     }
+// }
+
+impl Add<Length> for Length {
+    type Output = Self;
+
+    fn add(self, rhs: Length) -> Length {
+        match self {
+            Length::Simple(mlen) => todo!(),
+            Length::Tied(_, _) => todo!(),
+            Length::Triplet(_) => todo!(),
+        }
+    }
+}
+
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Note {
