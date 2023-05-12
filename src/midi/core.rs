@@ -3,10 +3,14 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ops::{Add, Mul};
 
-use midly::{live::LiveEvent, num::u15, Header, MidiMessage, Smf, Track};
+use midly::{
+    num::u15, num::u24, num::u28, num::u4, num::u7, Header, MidiMessage, Smf, Track, TrackEventKind,
+};
+use midly::{MetaMessage, TrackEvent};
 
 use crate::dsl::dsl::{
-    group_or_delimited_group, groups, BasicLength, Group, Length, ModdedLength, Note, Times,
+    group_or_delimited_group, groups, BasicLength, Group, GroupOrNote, Length, ModdedLength, Note,
+    Times,
 };
 
 // Typically used as number of ticks since the beginning of the track.
@@ -42,8 +46,6 @@ pub struct Delta(pub u128);
 pub enum EventType {
     NoteOn(Part),
     NoteOff(Part),
-    Tempo(u8),
-    Signature(TimeSignature),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -54,14 +56,20 @@ pub struct TimeSignature {
 
 impl TimeSignature {
     pub fn new(numerator: u8, denominator: BasicLength) -> Self {
-        Self { numerator, denominator }
+        Self {
+            numerator,
+            denominator,
+        }
     }
 }
 
 impl std::ops::Mul<u8> for TimeSignature {
     type Output = TimeSignature;
     fn mul(self, rhs: u8) -> TimeSignature {
-        TimeSignature { numerator: self.numerator * rhs as u8, denominator: self.denominator }
+        TimeSignature {
+            numerator: self.numerator * rhs as u8,
+            denominator: self.denominator,
+        }
     }
 }
 
@@ -86,8 +94,6 @@ fn test_cmp_time_signature() {
 }
 
 impl TimeSignature {
-
-
     /// Checks if these two signatures converges for the next 200 bars.
     fn converges_with(&self, other: TimeSignature) -> Result<(u32, TimeSignature), String> {
         let d: u32 = std::cmp::max(self.denominator, other.denominator)
@@ -172,9 +178,12 @@ fn test_converges() {
     };
     let three_fourth = TimeSignature {
         numerator: 3,
-        denominator: BasicLength::Fourth
+        denominator: BasicLength::Fourth,
     };
-    assert_eq!(three_sixteenth.converges(vec![four_fourth, three_fourth]), Ok((3, four_fourth)));
+    assert_eq!(
+        three_sixteenth.converges(vec![four_fourth, three_fourth]),
+        Ok((3, four_fourth))
+    );
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
@@ -187,12 +196,12 @@ pub enum Part {
 
 impl Part {
     // https://computermusicresource.com/GM.Percussion.KeyMap.html
-    fn to_midi_key(&self) -> u8 {
+    fn to_midi_key(&self) -> u7 {
         match self {
-            Part::KickDrum => 36,
-            Part::SnareDrum => 38,
-            Part::HiHat => 46,
-            Part::CrashCymbal => 49,
+            Part::KickDrum => u7::from(36),
+            Part::SnareDrum => u7::from(38),
+            Part::HiHat => u7::from(46),
+            Part::CrashCymbal => u7::from(49),
         }
     }
 }
@@ -210,7 +219,7 @@ pub struct EventGrid<T> {
     length: Tick,
 }
 
-impl<T: Add<Tick, Output = T> + Clone> Add for EventGrid<T> {
+impl<T: Add<Tick, Output = T> + Clone + Ord> Add for EventGrid<T> {
     type Output = EventGrid<T>;
 
     fn add(mut self, other: EventGrid<T>) -> EventGrid<T> {
@@ -223,9 +232,76 @@ impl<T: Add<Tick, Output = T> + Clone> Add for EventGrid<T> {
             })
             .collect();
         self.events.extend(other_events);
+        self.events.sort();
         self.length = self.length + other.length;
         self
     }
+}
+
+impl<T: Clone + Ord> Mul for EventGrid<T> {
+    type Output = EventGrid<T>;
+
+    fn mul(mut self, other: EventGrid<T>) -> EventGrid<T> {
+        let other_events: Vec<Event<T>> = other.events;
+
+        self.events.extend(other_events);
+        self.events.sort();
+        self.length = self.length + other.length;
+        self
+    }
+}
+
+#[test]
+fn test_arith_event_grids() {
+    let eg1 = EventGrid {
+        events: vec![
+            Event {
+                tick: Tick(0),
+                event_type: EventType::NoteOn(Part::KickDrum),
+            },
+            Event {
+                tick: Tick(TICKS_PER_QUARTER_NOTE as u128),
+                event_type: EventType::NoteOff(Part::KickDrum),
+            },
+        ],
+        length: Tick(TICKS_PER_QUARTER_NOTE as u128),
+    };
+    let eg2 = EventGrid {
+        events: vec![
+            Event {
+                tick: Tick(24),
+                event_type: EventType::NoteOn(Part::HiHat),
+            },
+            Event {
+                tick: Tick(TICKS_PER_QUARTER_NOTE as u128),
+                event_type: EventType::NoteOff(Part::HiHat),
+            },
+        ],
+        length: Tick(TICKS_PER_QUARTER_NOTE as u128),
+    };
+    let mul_res = EventGrid {
+        events: vec![
+            Event {
+                tick: Tick(0),
+                event_type: EventType::NoteOn(Part::KickDrum),
+            },
+            Event {
+                tick: Tick(24),
+                event_type: EventType::NoteOn(Part::HiHat),
+            },
+            Event {
+                tick: Tick(48),
+                event_type: EventType::NoteOff(Part::KickDrum),
+            },
+            Event {
+                tick: Tick(48),
+                event_type: EventType::NoteOff(Part::HiHat),
+            },
+        ],
+        length: Tick(96),
+    };
+
+    assert_eq!(eg1.clone() * eg2.clone(), mul_res);
 }
 
 #[test]
@@ -371,6 +447,35 @@ impl Length {
     }
 }
 
+#[allow(dead_code)]
+static MICROSECONDS_PER_BPM: u128 = 500000 as u128 / TICKS_PER_QUARTER_NOTE as u128;
+
+#[allow(dead_code)]
+static MIDI_CLOCKS_PER_CLICK: u8 = 24;
+
+/// Microseconds per quarter note. Default is 500,000 for 120bpm.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    derive_more::Add,
+    derive_more::Sub,
+    derive_more::Mul,
+    derive_more::Display,
+)]
+pub struct MidiTempo(u24);
+
+// impl MidiTempo {
+//     fn from_tempo(Tempo(t): Tempo) -> Self {
+//         let mt = t as u32 * MICROSECONDS_PER_BPM as u32;
+//         Self(u24::from(mt))
+//     }
+// }
+
 /// Returns an EventGrid and a total length. Length is needed as a group can end with rests that are not in the grid,
 /// and we need it to cycle the group.
 fn flatten_group(
@@ -510,26 +615,12 @@ fn flatten_groups(part: Part, groups: Vec<Group>) -> EventGrid<Tick> {
     grid
 }
 
-// Combines multiple sorted EventGrid<Tick>
-fn combine_event_grids<'a, T>(a: EventGrid<T>, b: EventGrid<T>) -> EventGrid<T>
-where
-    T: Ord,
-    EventGrid<T>: Add<EventGrid<T>, Output = EventGrid<T>>,
-{
-    let mut all_events = a + b;
-    all_events.events.sort_by(|e1, e2| e1.tick.cmp(&e2.tick));
-    all_events
-}
-
-// Combines a vector of sorted EventGrid<Tick>
-fn merge_event_grids<T>(mut eg: Vec<EventGrid<T>>) -> EventGrid<T>
-where
-    T: Ord,
-    EventGrid<T>: Add<EventGrid<T>, Output = EventGrid<T>> + Clone,
+// Combines a vector of sorted EventGrid<Tick> into a single `EventGrid<Tick>`
+fn merge_event_grids(mut eg: Vec<EventGrid<Tick>>) -> EventGrid<Tick>
 {
     let first = eg.pop().unwrap();
     eg.iter().fold(first, |mut acc, next| {
-        acc = combine_event_grids(acc, (*next).clone());
+        acc = acc * (*next).clone();
         acc
     })
 }
@@ -544,11 +635,11 @@ fn flatten_and_merge(groups: HashMap<Part, Vec<Group>>) -> EventGrid<Tick> {
 }
 
 // The length of a beat is not standard, so in order to fully describe the length of a MIDI tick the MetaMessage::Tempo event should be present.
-pub fn create_smf<'a>(groups: HashMap<Part, Vec<Group>>) -> Smf<'a> {
-    let tracks = vec![]; // create_tracks(groups); // FIXME
-                         // https://majicdesigns.github.io/MD_MIDIFile/page_timing.html
-                         // says " If it is not specified the MIDI default is 48 ticks per quarter note."
-                         // As it's required in `Header`, let's use the same value.
+pub fn create_smf<'a>(groups: HashMap<Part, Vec<Group>>, time_signature: TimeSignature) -> Smf<'a> {
+    let tracks = create_tracks(groups, time_signature); // FIXME
+                                                        // https://majicdesigns.github.io/MD_MIDIFile/page_timing.html
+                                                        // says " If it is not specified the MIDI default is 48 ticks per quarter note."
+                                                        // As it's required in `Header`, let's use the same value.
     let metrical = midly::Timing::Metrical(u15::new(TICKS_PER_QUARTER_NOTE));
     Smf {
         header: Header {
@@ -562,8 +653,32 @@ pub fn create_smf<'a>(groups: HashMap<Part, Vec<Group>>) -> Smf<'a> {
 /// Translates drum parts to a single MIDI track.
 fn create_tracks<'a>(
     parts_and_groups: HashMap<Part, Vec<Group>>,
+    time_signature: TimeSignature, // tempo: u32
 ) -> Vec<Vec<midly::TrackEvent<'a>>> {
     let event_grid = flatten_and_merge(parts_and_groups).to_delta();
-    let drums = Vec::new();
+    let mut drums = Vec::new();
+    // let midi_tempo = MidiTempo::from_tempo(Tempo(130)).0;
+    // drums.push(TrackEvent { delta: u28::from(0), kind: TrackEventKind::Meta(MetaMessage::Tempo(midi_tempo)) });
+    // drums.push(TrackEvent { delta: u28::from(0), kind: TrackEventKind::Meta(MetaMessage::TimeSignature(4, 4, MIDI_CLOCKS_PER_CLICK.clone(), 8))});
+    for event in event_grid.events {
+        let midi_message = match event.event_type {
+            EventType::NoteOn(part) => MidiMessage::NoteOn {
+                key: part.to_midi_key(),
+                vel: u7::from(120),
+            },
+            EventType::NoteOff(part) => MidiMessage::NoteOff {
+                key: part.to_midi_key(),
+                vel: u7::from(0),
+            },
+        };
+        drums.push(TrackEvent {
+            delta: u28::from(event.tick.0 as u32),
+            kind: TrackEventKind::Midi {
+                channel: u4::from(10),
+                message: midi_message,
+            },
+        })
+    }
+
     vec![drums]
 }
