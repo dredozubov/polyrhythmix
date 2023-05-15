@@ -14,3 +14,4 @@ nom = "*"
 midly = "0.5.3"
 derive_more = "*"
 clap = { version = "4.2.7", features = ["derive"] }
+dyn-clone = "1.0.11"

@@ -186,6 +186,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dyn-clone"
+version = "1.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
+
+[[package]]
 name = "either"
 version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -330,6 +336,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "derive_more",
+ "dyn-clone",
  "midly",
  "nom",
 ]

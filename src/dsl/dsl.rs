@@ -1,6 +1,6 @@
 use std::str;
 use std::vec::Vec;
-use std::ops::{Add, Mul};
+use std::ops::{Add};
 
 pub use nom::character::complete::{char, digit1};
 use nom::multi::many1;
@@ -109,20 +109,6 @@ pub enum Length {
 //         }
 //     }
 // }
-
-impl Add<Length> for Length {
-    type Output = Self;
-
-    fn add(self, rhs: Length) -> Length {
-        match self {
-            Length::Simple(mlen) => todo!(),
-            Length::Tied(_, _) => todo!(),
-            Length::Triplet(_) => todo!(),
-        }
-    }
-}
-
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Note {

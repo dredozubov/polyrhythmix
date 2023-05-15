@@ -1,12 +1,15 @@
 extern crate derive_more;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::iter::Cycle;
+use std::iter::Peekable;
 use std::ops::{Add, Mul};
+use std::path::Iter;
 
 use midly::{
     num::u15, num::u24, num::u28, num::u4, num::u7, Header, MidiMessage, Smf, Track, TrackEventKind,
 };
-use midly::{MetaMessage, TrackEvent};
+use midly::{EventIter, MetaMessage, TrackEvent};
 
 use crate::dsl::dsl::{
     group_or_delimited_group, groups, BasicLength, Group, GroupOrNote, Length, ModdedLength, Note,
@@ -25,6 +28,7 @@ use crate::dsl::dsl::{
     derive_more::Add,
     derive_more::Sub,
     derive_more::Mul,
+    derive_more::Rem,
     derive_more::Display,
 )]
 #[repr(transparent)]
@@ -181,7 +185,7 @@ fn test_converges() {
         denominator: BasicLength::Fourth,
     };
     assert_eq!(
-        three_sixteenth.converges(vec![four_fourth, three_fourth]),
+        three_sixteenth.converges(vec![four_fourth, three_fourth, four_fourth]),
         Ok((3, four_fourth))
     );
 }
@@ -218,6 +222,30 @@ pub struct EventGrid<T> {
     events: Vec<Event<T>>,
     length: Tick,
 }
+
+impl<T> IntoIterator for EventGrid<T> {
+    type Item = Event<T>;
+    type IntoIter = std::vec::IntoIter<Event<T>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.events.into_iter()
+    }
+}
+
+impl<T> EventGrid<T> {
+    pub fn iter(&self) -> std::slice::Iter<'_, Event<T>> {
+        self.events.iter()
+    }
+}
+
+// impl <T> Iterator for EventGrid<T> {
+//     type Item = Event<T>;
+
+//     fn next(&mut self) -> Option<Self::Item> {
+//         let e = self.events.iter().next();
+//         e.map(|x| *x )
+//     }
+// }
 
 impl<T: Add<Tick, Output = T> + Clone + Ord> Add for EventGrid<T> {
     type Output = EventGrid<T>;
@@ -606,7 +634,7 @@ fn test_cycle_grid() {
     );
 }
 
-fn flatten_groups(part: Part, groups: Vec<Group>) -> EventGrid<Tick> {
+fn flatten_groups(part: Part, groups: &Vec<Group>) -> EventGrid<Tick> {
     let mut time: Tick = Tick(0);
     let mut grid: EventGrid<Tick> = EventGrid::new();
     groups.iter().for_each(|group| {
@@ -616,8 +644,7 @@ fn flatten_groups(part: Part, groups: Vec<Group>) -> EventGrid<Tick> {
 }
 
 // Combines a vector of sorted EventGrid<Tick> into a single `EventGrid<Tick>`
-fn merge_event_grids(mut eg: Vec<EventGrid<Tick>>) -> EventGrid<Tick>
-{
+fn merge_event_grids(mut eg: Vec<EventGrid<Tick>>) -> EventGrid<Tick> {
     let first = eg.pop().unwrap();
     eg.iter().fold(first, |mut acc, next| {
         acc = acc * (*next).clone();
@@ -625,18 +652,129 @@ fn merge_event_grids(mut eg: Vec<EventGrid<Tick>>) -> EventGrid<Tick>
     })
 }
 
-// Returns time as a number of ticks from beginning, has to be turned into the midi delta-time.
-fn flatten_and_merge(groups: HashMap<Part, Vec<Group>>) -> EventGrid<Tick> {
-    let mut eg = Vec::new();
-    for (part, group) in groups {
-        eg.push(flatten_groups(part, group))
+pub struct EventIterator<T>
+where
+    T:Clone
+{
+    kick: Peekable<Cycle<std::vec::IntoIter<Event<T>>>>,
+    snare: Peekable<Cycle<std::vec::IntoIter<Event<T>>>>,
+    hihat: Peekable<Cycle<std::vec::IntoIter<Event<T>>>>,
+    crash: Peekable<Cycle<std::vec::IntoIter<Event<T>>>>,
+    kick_length: Tick,
+    snare_length: Tick,
+    hihat_length: Tick,
+    crash_length: Tick,
+    limit: Tick,
+    time: Tick
+}
+
+impl<T> EventIterator<T>
+where
+    T: Clone
+ {
+    fn new(
+        kick_grid: EventGrid<T>,
+        snare_grid: EventGrid<T>,
+        hihat_grid: EventGrid<T>,
+        crash_grid: EventGrid<T>,
+        limit_value: Tick,
+    ) -> EventIterator<T> {
+        let event_iterator = EventIterator {
+            kick_length: kick_grid.length.clone(),
+            snare_length: snare_grid.length.clone(),
+            hihat_length: hihat_grid.length.clone(),
+            crash_length: crash_grid.length.clone(),
+            kick: kick_grid.into_iter().cycle().peekable(),
+            snare: snare_grid.into_iter().cycle().peekable(),
+            hihat: hihat_grid.into_iter().cycle().peekable(),
+            crash: crash_grid.into_iter().cycle().peekable(),
+            limit: limit_value,
+            time: Tick(0)
+        };
+        event_iterator
     }
-    merge_event_grids(eg)
+}
+
+impl Iterator for EventIterator<Tick> {
+    type Item = Event<Tick>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut min_part = Part::KickDrum;
+        let mut min_tick = self.limit;
+        let mut min_event: Event<Tick> = Event { tick: Tick(0), event_type: EventType::NoteOn(Part::KickDrum) };
+        let mut min_group_length: Tick;
+        let candidates = vec![
+            (self.kick.peek().unwrap(), Part::KickDrum),
+            (self.snare.peek().unwrap(), Part::SnareDrum),
+            (self.hihat.peek().unwrap(), Part::HiHat),
+            (self.crash.peek().unwrap(), Part::CrashCymbal),
+        ];
+
+        for (&e, p) in candidates {
+            if e.tick <= min_tick {
+                min_part = p;
+                min_tick = e.tick;
+                min_event = e;
+            } else {
+                continue;
+            }
+        }
+
+        match min_part {
+            Part::KickDrum => {
+                self.kick.next();
+                min_group_length = self.kick_length;
+            },
+            Part::SnareDrum => {
+                self.snare.next();
+                min_group_length = self.snare_length;
+            },
+            Part::HiHat => {
+                self.hihat.next();
+                min_group_length = self.hihat_length;
+            },
+            Part::CrashCymbal => {
+                self.crash.next();
+                min_group_length = self.crash_length;
+            },
+        };
+
+        if min_event.tick < self.limit {
+            self.time = self.time + min_event.tick;
+            if self.time > min_group_length {
+                let remainder = Tick(self.time.0 % min_group_length.0);
+                min_event.tick = self.time + remainder;
+                Some(min_event)
+            } else {
+                Some(min_event)
+            }
+        } else {
+            None
+        }
+    }
+}
+
+// Returns time as a number of ticks from beginning, has to be turned into the midi delta-time.
+fn flatten_and_merge<'a>(
+    mut groups: HashMap<Part, Vec<Group>>,
+    time_signature: TimeSignature,
+) -> EventIterator<Tick> {
+    let f = |p| {
+        groups
+        .get(&p)
+        .map(|g| flatten_groups(p, g))
+        .unwrap_or(EventGrid::new())
+    };
+    let kick = f(Part::KickDrum);
+    let snare = f(Part::SnareDrum);
+    let hihat = f(Part::HiHat);
+    let crash = f(Part::CrashCymbal);
+    EventIterator::new(kick, snare, hihat, crash, Tick(1000000))
 }
 
 // The length of a beat is not standard, so in order to fully describe the length of a MIDI tick the MetaMessage::Tempo event should be present.
 pub fn create_smf<'a>(groups: HashMap<Part, Vec<Group>>, time_signature: TimeSignature) -> Smf<'a> {
-    let tracks = create_tracks(groups, time_signature); // FIXME
+    let tracks = vec![] ; // create_tracks(groups, time_signature); // FIXME
                                                         // https://majicdesigns.github.io/MD_MIDIFile/page_timing.html
                                                         // says " If it is not specified the MIDI default is 48 ticks per quarter note."
                                                         // As it's required in `Header`, let's use the same value.
@@ -650,35 +788,36 @@ pub fn create_smf<'a>(groups: HashMap<Part, Vec<Group>>, time_signature: TimeSig
     }
 }
 
-/// Translates drum parts to a single MIDI track.
-fn create_tracks<'a>(
-    parts_and_groups: HashMap<Part, Vec<Group>>,
-    time_signature: TimeSignature, // tempo: u32
-) -> Vec<Vec<midly::TrackEvent<'a>>> {
-    let event_grid = flatten_and_merge(parts_and_groups).to_delta();
-    let mut drums = Vec::new();
-    // let midi_tempo = MidiTempo::from_tempo(Tempo(130)).0;
-    // drums.push(TrackEvent { delta: u28::from(0), kind: TrackEventKind::Meta(MetaMessage::Tempo(midi_tempo)) });
-    // drums.push(TrackEvent { delta: u28::from(0), kind: TrackEventKind::Meta(MetaMessage::TimeSignature(4, 4, MIDI_CLOCKS_PER_CLICK.clone(), 8))});
-    for event in event_grid.events {
-        let midi_message = match event.event_type {
-            EventType::NoteOn(part) => MidiMessage::NoteOn {
-                key: part.to_midi_key(),
-                vel: u7::from(120),
-            },
-            EventType::NoteOff(part) => MidiMessage::NoteOff {
-                key: part.to_midi_key(),
-                vel: u7::from(0),
-            },
-        };
-        drums.push(TrackEvent {
-            delta: u28::from(event.tick.0 as u32),
-            kind: TrackEventKind::Midi {
-                channel: u4::from(10),
-                message: midi_message,
-            },
-        })
-    }
+// /// Translates drum parts to a single MIDI track.
+// fn create_tracks<'a>(
+//     parts_and_groups: HashMap<Part, Vec<Group>>,
+//     time_signature: TimeSignature, // tempo: u32
+// ) -> Vec<Vec<midly::TrackEvent<'a>>> {
+//     //FIXME: unhardcode time signature
+//     let event_grid = flatten_and_merge(parts_and_groups, TimeSignature { numerator: 4, denominator: BasicLength::Fourth );
+//     let mut drums = Vec::new();
+//     // let midi_tempo = MidiTempo::from_tempo(Tempo(130)).0;
+//     // drums.push(TrackEvent { delta: u28::from(0), kind: TrackEventKind::Meta(MetaMessage::Tempo(midi_tempo)) });
+//     // drums.push(TrackEvent { delta: u28::from(0), kind: TrackEventKind::Meta(MetaMessage::TimeSignature(4, 4, MIDI_CLOCKS_PER_CLICK.clone(), 8))});
+//     for event in event_grid.events {
+//         let midi_message = match event.event_type {
+//             EventType::NoteOn(part) => MidiMessage::NoteOn {
+//                 key: part.to_midi_key(),
+//                 vel: u7::from(120),
+//             },
+//             EventType::NoteOff(part) => MidiMessage::NoteOff {
+//                 key: part.to_midi_key(),
+//                 vel: u7::from(0),
+//             },
+//         };
+//         drums.push(TrackEvent {
+//             delta: u28::from(event.tick.0 as u32),
+//             kind: TrackEventKind::Midi {
+//                 channel: u4::from(10),
+//                 message: midi_message,
+//             },
+//         })
+//     }
 
-    vec![drums]
-}
+//     vec![drums]
+// }
