@@ -10,6 +10,12 @@ use nom::branch::alt;
 
 use nom::combinator::{map, map_res};
 
+
+/// Allows measurement in 128th notes.
+pub trait KnownLength {
+    fn to_128th(&self) -> u32;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum BasicLength {
     Whole,
@@ -19,6 +25,20 @@ pub enum BasicLength {
     Sixteenth,
     ThirtySecond,
     SixtyFourth
+}
+
+impl KnownLength for BasicLength {
+    fn to_128th(&self) -> u32 {
+        match self {
+            BasicLength::Whole => 128,
+            BasicLength::Half => 64,
+            BasicLength::Fourth => 32,
+            BasicLength::Eighth => 16,
+            BasicLength::Sixteenth => 8,
+            BasicLength::ThirtySecond => 4,
+            BasicLength::SixtyFourth => 2,
+        }
+    }
 }
 
 impl BasicLength {
@@ -87,6 +107,18 @@ pub enum ModdedLength {
     Dotted(BasicLength)
 }
 
+impl KnownLength for ModdedLength {
+    fn to_128th(&self) -> u32 {
+        match self {
+            ModdedLength::Plain(bl) => bl.to_128th(),
+            ModdedLength::Dotted(bl) => {
+                let l = bl.to_128th();
+                l + l /2
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Length {
     Simple(ModdedLength),
@@ -94,21 +126,15 @@ pub enum Length {
     Triplet(ModdedLength)
 }
 
-// impl Length {
-//     fn from_group(group: Group) -> Self {
-//         let mut numerator = 0;
-//         for x in group.notes {
-//             match x {
-//                 crate::dsl::dsl::GroupOrNote::SingleGroup(g) => {
-//                     todo!()
-//                 },
-//                 crate::dsl::dsl::GroupOrNote::SingleNote(_) => {
-//                     numerator = numerator + 1;
-//                 },
-//             }
-//         }
-//     }
-// }
+impl KnownLength for Length {
+    fn to_128th(&self) -> u32 {
+        match self {
+            Length::Simple(ml) => ml.to_128th(),
+            Length::Tied(ml1, ml2) => ml1.to_128th() + ml2.to_128th(),
+            Length::Triplet(ml) => ml.to_128th() * 2 / 3
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Note {
@@ -117,6 +143,7 @@ pub enum Note {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(transparent)]
 pub struct Times(pub u16);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,6 +159,20 @@ pub struct Group {
     pub times: Times
 }
 
+impl KnownLength for Group {
+    fn to_128th(&self) -> u32 {
+        let mut acc = 0;
+        let note_length = self.length.to_128th();
+        for group in self.notes.iter() {
+            match group {
+                GroupOrNote::SingleGroup(subgroup) => { acc += subgroup.to_128th(); },
+                GroupOrNote::SingleNote(_) => { acc += note_length; },
+            }
+        };
+        acc * self.times.0 as u32
+    }
+}
+
 impl std::ops::Deref for Group {
     type Target = Vec<GroupOrNote>;
 
@@ -141,61 +182,61 @@ impl std::ops::Deref for Group {
 }
 
 #[allow(dead_code)]
-static WHOLE : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Whole));
+pub static WHOLE : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Whole));
 #[allow(dead_code)]
-static HALF : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Half));
+pub static HALF : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Half));
 #[allow(dead_code)]
-static FOURTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Fourth));
+pub static FOURTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Fourth));
 #[allow(dead_code)]
-static EIGHTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Eighth));
+pub static EIGHTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Eighth));
 #[allow(dead_code)]
-static SIXTEENTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Sixteenth));
+pub static SIXTEENTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Sixteenth));
 #[allow(dead_code)]
-static THIRTY_SECOND : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::ThirtySecond));
+pub static THIRTY_SECOND : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::ThirtySecond));
 #[allow(dead_code)]
-static SIXTY_FOURTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::SixtyFourth));
+pub static SIXTY_FOURTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::SixtyFourth));
 
 #[allow(dead_code)]
-static WHOLE_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Whole));
+pub static WHOLE_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Whole));
 #[allow(dead_code)]
-static HALF_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Half));
+pub static HALF_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Half));
 #[allow(dead_code)]
-static FOURTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Fourth));
+pub static FOURTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Fourth));
 #[allow(dead_code)]
-static EIGHTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Eighth));
+pub static EIGHTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Eighth));
 #[allow(dead_code)]
-static SIXTEENTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Sixteenth));
+pub static SIXTEENTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Sixteenth));
 #[allow(dead_code)]
-static THIRTY_SECOND_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::ThirtySecond));
+pub static THIRTY_SECOND_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::ThirtySecond));
 #[allow(dead_code)]
-static SIXTY_FOURTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::SixtyFourth));
+pub static SIXTY_FOURTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::SixtyFourth));
 
 #[allow(dead_code)]
-static WHOLE_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Whole));
+pub static WHOLE_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Whole));
 #[allow(dead_code)]
-static HALF_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Half));
+pub static HALF_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Half));
 #[allow(dead_code)]
-static FOURTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Fourth));
+pub static FOURTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Fourth));
 #[allow(dead_code)]
-static EIGHTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Eighth));
+pub static EIGHTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Eighth));
 #[allow(dead_code)]
-static SIXTEENTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Sixteenth));
+pub static SIXTEENTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Sixteenth));
 #[allow(dead_code)]
-static THIRTY_SECOND_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::ThirtySecond));
+pub static THIRTY_SECOND_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::ThirtySecond));
 #[allow(dead_code)]
-static SIXTY_FOURTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::SixtyFourth));
+pub static SIXTY_FOURTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::SixtyFourth));
 
 #[allow(dead_code)]
-static HIT : GroupOrNote = GroupOrNote::SingleNote(Note::Hit);
+pub static HIT : GroupOrNote = GroupOrNote::SingleNote(Note::Hit);
 #[allow(dead_code)]
-static REST : GroupOrNote = GroupOrNote::SingleNote(Note::Rest);
+pub static REST : GroupOrNote = GroupOrNote::SingleNote(Note::Rest);
 
 #[allow(dead_code)]
-static ONCE : &Times = &Times(1);
+pub static ONCE : &Times = &Times(1);
 #[allow(dead_code)]
-static TWICE: &Times = &Times(2);
+pub static TWICE: &Times = &Times(2);
 #[allow(dead_code)]
-static THRICE : &Times = &Times(3);
+pub static THRICE : &Times = &Times(3);
 
 
 fn hit(input: &str) -> IResult<&str, Note> {

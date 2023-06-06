@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::process::exit;
 
 use poly::dsl::dsl;
-use poly::midi;
-use poly::midi::core::{Part, create_smf, TimeSignature};
+use poly::midi::core::{Part, create_smf};
+use poly::midi::time::TimeSignature;
 
 use clap::*;
 
