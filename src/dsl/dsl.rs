@@ -1,4 +1,5 @@
-use std::str;
+use std::num::ParseIntError;
+use std::str::{self, FromStr};
 use std::vec::Vec;
 use std::ops::{Add};
 
@@ -27,6 +28,18 @@ pub enum BasicLength {
     SixtyFourth
 }
 
+impl FromStr for BasicLength {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let result: Result<u16, ParseIntError> = s.parse();
+        match result {
+            Ok(n) => Self::from_num(n),
+            Result::Err(e) => panic!("{}", e)
+        }
+    }
+}
+
 impl KnownLength for BasicLength {
     fn to_128th(&self) -> u32 {
         match self {
@@ -43,16 +56,16 @@ impl KnownLength for BasicLength {
 
 impl BasicLength {
     /// Unsafe method, so it should only be used from `add`.
-    fn from_num(n: u16) -> Self {
+    fn from_num(n: u16) -> Result<Self, String> {
         match n {
-            1 => BasicLength::SixtyFourth,
-            2 => BasicLength::ThirtySecond,
-            4 => BasicLength::Sixteenth,
-            8 => BasicLength::Eighth,
-            16 => BasicLength::Fourth,
-            32 => BasicLength::Half,
-            64 => BasicLength::Whole,
-            e => panic!("{} is not a num BasicLength can be constructed from", e)
+            1 => Ok(BasicLength::SixtyFourth),
+            2 => Ok(BasicLength::ThirtySecond),
+            4 => Ok(BasicLength::Sixteenth),
+            8 => Ok(BasicLength::Eighth),
+            16 => Ok(BasicLength::Fourth),
+            32 => Ok(BasicLength::Half),
+            64 => Ok(BasicLength::Whole),
+            e => Err(format!("{} is not a num BasicLength can be constructed from", e))
         }
     }
 }
@@ -71,24 +84,24 @@ impl Add<BasicLength> for BasicLength {
             BasicLength::SixtyFourth => 1,
         };
         if self == rhs && self != BasicLength::Whole {
-            Length::Simple(ModdedLength::Plain(BasicLength::from_num(f(self) * 2)))
+            Length::Simple(ModdedLength::Plain(BasicLength::from_num(f(self) * 2).unwrap()))
         } else {
             let n1 : u16 = f(self);
             let n2 = f(rhs);
             let total = n1 + n2;
             
             if total > 64 {
-                Length::Tied(ModdedLength::Plain(BasicLength::Whole), ModdedLength::Plain(BasicLength::from_num(total - 64)))
+                Length::Tied(ModdedLength::Plain(BasicLength::Whole), ModdedLength::Plain(BasicLength::from_num(total - 64).unwrap()))
             } else if total > 32 {
-                Length::Tied(ModdedLength::Plain(BasicLength::Half), ModdedLength::Plain(BasicLength::from_num(total - 32)))
+                Length::Tied(ModdedLength::Plain(BasicLength::Half), ModdedLength::Plain(BasicLength::from_num(total - 32).unwrap()))
             } else if total > 16 {
-                Length::Tied(ModdedLength::Plain(BasicLength::Fourth), ModdedLength::Plain(BasicLength::from_num(total - 16)))
+                Length::Tied(ModdedLength::Plain(BasicLength::Fourth), ModdedLength::Plain(BasicLength::from_num(total - 16).unwrap()))
             } else if total > 8 {
-                Length::Tied(ModdedLength::Plain(BasicLength::Eighth), ModdedLength::Plain(BasicLength::from_num(total - 8)))
+                Length::Tied(ModdedLength::Plain(BasicLength::Eighth), ModdedLength::Plain(BasicLength::from_num(total - 8).unwrap()))
             } else if total > 4 {
-                Length::Tied(ModdedLength::Plain(BasicLength::Fourth), ModdedLength::Plain(BasicLength::from_num(total - 4)))
+                Length::Tied(ModdedLength::Plain(BasicLength::Fourth), ModdedLength::Plain(BasicLength::from_num(total - 4).unwrap()))
             } else {
-                Length::Tied(ModdedLength::Plain(BasicLength::Half), ModdedLength::Plain(BasicLength::from_num(total - 2)))
+                Length::Tied(ModdedLength::Plain(BasicLength::Half), ModdedLength::Plain(BasicLength::from_num(total - 2).unwrap()))
             }
         }
     }

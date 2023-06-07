@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::process::exit;
+use std::str::FromStr;
 
 use poly::dsl::dsl;
 use poly::midi::core::{Part, create_smf};
@@ -73,16 +74,18 @@ fn main() {
                 validate_and_parse_part(hihat, Part::HiHat, &mut groups);
                 validate_and_parse_part(crash, Part::CrashCymbal, &mut groups);
 
-                // TODO
-                let time_signature = TimeSignature { numerator: 4, denominator: dsl::BasicLength::Fourth };
+                let signature = match TimeSignature::from_str(&time_signature) {
+                    Err(e) => panic!("Can't parse the time signature: {}", e),
+                    Ok(x) => x
+                };
 
                 match output {
                     None => {
                         println!("No output file path was supplied, running a dry run...");
-                        create_smf(groups, time_signature)
+                        create_smf(groups, signature)
                     },
                     Some(path) => {
-                        match create_smf(groups, time_signature).save(path.clone()) {
+                        match create_smf(groups, signature).save(path.clone()) {
                             Ok(_) => {
                                 println!("{} was written successfully", path);
                                 exit(0)

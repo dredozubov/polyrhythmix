@@ -3,6 +3,7 @@ use crate::dsl::dsl::{BasicLength, Group, GroupOrNote, KnownLength, Note, Times,
 use std::cmp::Ordering;
 
 use std;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TimeSignature {
@@ -15,6 +16,31 @@ impl TimeSignature {
         Self {
             numerator,
             denominator,
+        }
+    }
+
+}
+
+impl FromStr for TimeSignature {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut after_split = s.splitn(2, '/');
+        let num = after_split.next();
+        let den = after_split.next();
+        match (num, den) {
+            (None, None) => Err(format!("Can't parse neither numerator nor denominator of a time signature: {}", s)),
+            (None, Some(_)) => Err(format!("Can't parse time signature numerator: {}", s)),
+            (Some(_), None) => Err(format!("Can't parse time signature denominator: {}", s)),
+            (Some(numerator_str), Some(d)) => {
+                match BasicLength::from_str(d) {
+                    Ok(denominator) => match u8::from_str(numerator_str) {
+                        Ok(numerator) => Ok(TimeSignature { numerator, denominator }),
+                        Err(e) => Err(format!("Can't parse time signature numerator: {}", s)),
+                    } ,
+                    Err(e) => Err(e),
+                }
+            }
         }
     }
 }
@@ -56,10 +82,10 @@ impl KnownLength for TimeSignature {
 }
 
 impl TimeSignature {
-    pub fn converges<T: KnownLength>(&self, multiple: Vec<T>) -> Result<u32, String> {
+    pub fn converges<T: KnownLength, I: IntoIterator<Item = T>>(&self, multiple: I) -> Result<u32, String> {
         let bar_len = self.to_128th();
         let result = multiple
-            .iter()
+            .into_iter()
             .fold(bar_len, |acc, t| lowest_common_divisor(t.to_128th(), acc));
 
         let limit = 1000;
