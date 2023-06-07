@@ -1,5 +1,5 @@
 extern crate derive_more;
-use crate::dsl::dsl::{BasicLength, KnownLength, Group, GroupOrNote, Note, FOURTH, Times, EIGHTH};
+use crate::dsl::dsl::{BasicLength, Group, GroupOrNote, KnownLength, Note, Times, EIGHTH, FOURTH};
 use std::cmp::Ordering;
 
 use std;
@@ -56,172 +56,71 @@ impl KnownLength for TimeSignature {
 }
 
 impl TimeSignature {
-    fn converges_with(&self, other: TimeSignature) -> Result<(u32, TimeSignature), String> {
-        let d: u32 = std::cmp::max(self.denominator, other.denominator)
-            .to_note_length()
-            .into();
-        let d1: u32 = self.denominator.to_note_length().into();
-        let d2: u32 = other.denominator.to_note_length().into();
-        let coef1 = d / d1;
-        let coef2 = d / d2;
-        let num1: u32 = coef1 * (self.numerator as u32);
-        let num2: u32 = coef2 * (other.numerator as u32);
-        let greater_time_signature = self.max(&other);
-        let f = |max, min| {
-            let mut res = Err(format!("Not converges over 1000 bars of {:?}", other));
-            for i in 1..1000 {
-                if (max * i) % min == 0 {
-                    res = Ok((i, *greater_time_signature));
-                    break;
-                }
-            }
-            res
-        };
-        match num1.cmp(&num2) {
-            std::cmp::Ordering::Less => f(num2, num1),
-            std::cmp::Ordering::Equal => Ok((1, *greater_time_signature)),
-            std::cmp::Ordering::Greater => f(num1, num2),
-        }
-    }
-
-    /// The function takes a vector of time signatures and tries to find out if they all converge over a finite number of bars.
-    ///
-    /// Arguments:
-    ///
-    /// * `time_signatures`: `time_signatures` is a vector of `TimeSignature` structs. The function
-    /// `converges` takes this vector as input and iterates over it using the `iter()` method. It then
-    /// uses the `try_fold()` method to fold over the vector and accumulate a result.
-    ///
-    /// Returns:
-    ///
-    /// Returns the number of bars to converge + suggested time signature.
-    /// Returns Err if signatures won't converge.
-    fn converges(
-        &self,
-        time_signatures: Vec<TimeSignature>,
-    ) -> Result<(u32, TimeSignature), String> {
-        time_signatures
-            .iter()
-            .try_fold((1, *self), |(bars, ts), x| match ts.converges_with(*x) {
-                Ok((new_bars, greater_signature)) => {
-                    if new_bars > bars {
-                        if new_bars % bars == 0 {
-                            Ok((new_bars, greater_signature))
-                        } else {
-                            Err(format!("{:?} don't converge with {:?}", self, x))
-                        }
-                    } else {
-                        if bars % new_bars == 0 {
-                            Ok((bars, greater_signature))
-                        } else {
-                            Err(format!("{:?} don't converge with {:?}", self, x))
-                        }
-                    }
-                }
-                Err(e) => Err(e),
-            })
-    }
-
-    /// Returns number of bars in the specified time signature that it takes to converge with the group.
-    /// Otherwise returns Err.
-    fn converges_over<T: KnownLength>(&self, over: T) -> Result<u32, String> {
+    pub fn converges<T: KnownLength>(&self, multiple: Vec<T>) -> Result<u32, String> {
         let bar_len = self.to_128th();
-        let mut bars = 1;
-        let group_len = over.to_128th();
-        let mut out = Err("Do not converge".to_string());
+        let result = multiple
+            .iter()
+            .fold(bar_len, |acc, t| lowest_common_divisor(t.to_128th(), acc));
+
         let limit = 1000;
 
-        while bars <= limit {
-            let bars_len = bar_len * bars;
-            if bars_len % group_len == 0 {
-                // return
-                out = Ok(bars);
-                break
-            }
+        let out = result / bar_len;
 
-            if bars == limit {
-                break;
-            } else {
-                bars += 1
-            }
+        if limit > out {
+            Ok(out)
+        } else {
+            Err("Does not converge".to_string())
         }
-        out
     }
 }
 
-#[test]
-fn test_converges_over() {
-    let four_fourth = TimeSignature {
-        numerator: 4,
-        denominator: BasicLength::Fourth,
-    };
-    let three_fourth_group = Group {
-        notes: vec![GroupOrNote::SingleNote(Note::Hit)],
-        length: FOURTH.clone(),
-        times: Times(3)
-    };
-    let thirteen_eights = Group {
-        notes: vec![GroupOrNote::SingleNote(Note::Hit)],
-        length: FOURTH.clone(),
-        times: Times(12)
-    };
-    let in_shards_poly = Group {
-        notes: vec![GroupOrNote::SingleNote(Note::Hit), GroupOrNote::SingleNote(Note::Rest), GroupOrNote::SingleGroup(thirteen_eights)],
-        length: EIGHTH.clone(),
-        times: Times(1)
-    };
-    assert_eq!(four_fourth.converges_over(three_fourth_group), Ok(3));
-    assert_eq!(four_fourth.converges_over(in_shards_poly), Ok(13));
+fn lowest_common_divisor(a: u32, b: u32) -> u32 {
+    let mut lcm = u32::max(a, b);
+
+    while lcm % a != 0 || lcm % b != 0 {
+        lcm += 1;
+    }
+
+    lcm
 }
 
 #[test]
-fn test_converges_with() {
-    let three_sixteenth = TimeSignature {
-        numerator: 3,
-        denominator: BasicLength::Sixteenth,
-    };
-    let four_fourth = TimeSignature {
-        numerator: 4,
-        denominator: BasicLength::Fourth,
-    };
-    let thirteen_eights = TimeSignature {
-        numerator: 13,
-        denominator: BasicLength::Eighth,
-    };
-    assert_eq!(
-        three_sixteenth.converges_with(four_fourth),
-        Ok((3, four_fourth))
-    );
-    assert_eq!(
-        thirteen_eights.converges_with(four_fourth),
-        Ok((15, four_fourth))
-    )
+fn test_lcm() {
+    assert_eq!(lowest_common_divisor(128, 96), 384);
+    assert_eq!(lowest_common_divisor(96, 128), 384);
 }
 
 #[test]
 fn test_converges() {
-    let three_sixteenth = TimeSignature {
-        numerator: 3,
-        denominator: BasicLength::Sixteenth,
-    };
     let four_fourth = TimeSignature {
         numerator: 4,
+        denominator: BasicLength::Fourth,
+    };
+    let six_fourth = TimeSignature {
+        numerator: 6,
         denominator: BasicLength::Fourth,
     };
     let three_fourth = TimeSignature {
         numerator: 3,
         denominator: BasicLength::Fourth,
     };
-    let thirteen_eights = TimeSignature {
-        numerator: 13,
-        denominator: BasicLength::Eighth,
+    let thirteen_eights = Group {
+        notes: vec![GroupOrNote::SingleNote(Note::Hit)],
+        length: FOURTH.clone(),
+        times: Times(12),
     };
-    assert_eq!(
-        three_sixteenth.converges(vec![four_fourth, three_fourth, four_fourth]),
-        Ok((3, four_fourth))
-    );
-    assert_eq!(
-        four_fourth.converges(vec![thirteen_eights]),
-        Ok((15, four_fourth))
-    );
+    let in_shards_poly = Group {
+        notes: vec![
+            GroupOrNote::SingleNote(Note::Hit),
+            GroupOrNote::SingleNote(Note::Rest),
+            GroupOrNote::SingleGroup(thirteen_eights),
+        ],
+        length: EIGHTH.clone(),
+        times: Times(1),
+    };
+    assert_eq!(three_fourth.converges(vec![four_fourth]), Ok(4));
+    assert_eq!(four_fourth.converges(vec![three_fourth]), Ok(3));
+    assert_eq!(four_fourth.converges(vec![three_fourth, four_fourth]), Ok(3));
+    assert_eq!(four_fourth.converges(vec![three_fourth, six_fourth, four_fourth]), Ok(3));
+    assert_eq!(four_fourth.converges(vec![in_shards_poly]), Ok(13));
 }
