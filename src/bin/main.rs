@@ -46,7 +46,7 @@ fn part_to_string(part: Part) -> String {
     }
 }
 
-fn validate_and_parse_part(cli: Option<String>, part: Part, patterns: &mut HashMap<Part, Vec<dsl::Group>>) -> () {
+fn validate_and_parse_part(cli: Option<String>, part: Part, patterns: &mut HashMap<Part, dsl::Groups>) -> () {
     match cli {
         None => {},
         Some(pattern) => {

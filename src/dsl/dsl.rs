@@ -155,44 +155,6 @@ pub enum Note {
     Rest
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(transparent)]
-pub struct Times(pub u16);
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GroupOrNote {
-    SingleGroup(Group),
-    SingleNote(Note)
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Group {
-    pub notes: Vec<GroupOrNote>,
-    pub length: Length,
-    pub times: Times
-}
-
-impl KnownLength for Group {
-    fn to_128th(&self) -> u32 {
-        let mut acc = 0;
-        let note_length = self.length.to_128th();
-        for group in self.notes.iter() {
-            match group {
-                GroupOrNote::SingleGroup(subgroup) => { acc += subgroup.to_128th(); },
-                GroupOrNote::SingleNote(_) => { acc += note_length; },
-            }
-        };
-        acc * self.times.0 as u32
-    }
-}
-
-impl std::ops::Deref for Group {
-    type Target = Vec<GroupOrNote>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.notes
-    }
-}
 
 #[allow(dead_code)]
 pub static WHOLE : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Whole));
@@ -251,6 +213,78 @@ pub static TWICE: &Times = &Times(2);
 #[allow(dead_code)]
 pub static THRICE : &Times = &Times(3);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct Times(pub u16);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GroupOrNote {
+    SingleGroup(Group),
+    SingleNote(Note)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Group {
+    pub notes: Vec<GroupOrNote>,
+    pub length: Length,
+    pub times: Times
+}
+
+impl Group {
+    pub fn empty() -> Self {
+        Group { notes: Vec::new(), length: FOURTH.clone(), times: Times(1) }
+    }
+}
+
+impl KnownLength for &Group {
+    fn to_128th(&self) -> u32 {
+        let mut acc = 0;
+        let note_length = self.length.to_128th();
+        for group in self.notes.iter() {
+            match group {
+                GroupOrNote::SingleGroup(subgroup) => { acc += subgroup.to_128th(); },
+                GroupOrNote::SingleNote(_) => { acc += note_length; },
+            }
+        };
+        acc * self.times.0 as u32
+    }
+}
+
+impl KnownLength for Group {
+    fn to_128th(&self) -> u32 {
+        let mut acc = 0;
+        let note_length = self.length.to_128th();
+        for group in self.notes.iter() {
+            match group {
+                GroupOrNote::SingleGroup(subgroup) => { acc += subgroup.to_128th(); },
+                GroupOrNote::SingleNote(_) => { acc += note_length; },
+            }
+        };
+        acc * self.times.0 as u32
+    }
+}
+
+impl std::ops::Deref for Group {
+    type Target = Vec<GroupOrNote>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.notes
+    }
+}
+
+pub struct Groups(pub Vec<Group>);
+
+impl KnownLength for Groups {
+    fn to_128th(&self) -> u32 {
+        self.0.iter().fold(0, |acc, x| { acc + x.to_128th() })
+    }
+}
+
+impl KnownLength for &Groups {
+    fn to_128th(&self) -> u32 {
+        self.0.iter().fold(0, |acc, x| { acc + x.to_128th() })
+    }
+}
 
 fn hit(input: &str) -> IResult<&str, Note> {
     map(char('x'), |_| { Note::Hit })(input)
@@ -319,8 +353,8 @@ pub fn group_or_delimited_group(input: &str) -> IResult<&str, Group> {
   alt((delimited_group, group))(input)
 }
 
-pub fn groups(input: &str) -> IResult<&str, Vec<Group>> {
-    many1(group_or_delimited_group)(input)
+pub fn groups(input: &str) -> IResult<&str, Groups> {
+    many1(group_or_delimited_group)(input).map(|x| { (x.0, Groups(x.1)) } )
 }
 
 #[test]
