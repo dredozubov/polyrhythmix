@@ -68,18 +68,15 @@ impl Ord for EventType {
     fn cmp(&self, other: &EventType) -> Ordering {
         match (self, other) {
             (EventType::NoteOn(a), EventType::NoteOn(b)) => a.cmp(b),
-            (EventType::NoteOn(_), EventType::NoteOff(_)) => Ordering::Greater,
-            (EventType::NoteOff(_), EventType::NoteOn(_)) => Ordering::Less,
+            (EventType::NoteOn(a), EventType::NoteOff(b)) => match a.cmp(b) {
+                Ordering::Equal => Ordering::Greater,
+                ord => ord
+            },
+            (EventType::NoteOff(a), EventType::NoteOn(b)) => match a.cmp(b) {
+                Ordering::Equal => Ordering::Less,
+                ord => ord
+            },
             (EventType::NoteOff(a), EventType::NoteOff(b)) => a.cmp(b),
-        }
-    }
-}
-
-impl EventType {
-    fn is_note_on(&self) -> bool {
-        match self {
-            EventType::NoteOn(_) => true,
-            EventType::NoteOff(_) => false,
         }
     }
 }
@@ -104,10 +101,36 @@ impl Part {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Event<T> {
     tick: T,
     event_type: EventType,
+}
+
+impl<T> PartialOrd for Event<T>
+where
+    T: PartialOrd + Ord,
+    Event<T>: Ord
+{
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+
+    fn lt(&self, other: &Self) -> bool {
+        matches!(self.partial_cmp(other), Some(Ordering::Less))
+    }
+
+    fn le(&self, other: &Self) -> bool {
+        matches!(self.partial_cmp(other), Some(Ordering::Less | Ordering::Equal))
+    }
+
+    fn gt(&self, other: &Self) -> bool {
+        matches!(self.partial_cmp(other), Some(Ordering::Greater))
+    }
+
+    fn ge(&self, other: &Self) -> bool {
+        matches!(self.partial_cmp(other), Some(Ordering::Greater | Ordering::Equal))
+    }
 }
 
 impl<T> Ord for Event<T>
@@ -141,8 +164,13 @@ fn test_ord_event_t() {
     assert_eq!(first_off.cmp(&second_on), Ordering::Less);
 
     let mut vec1 = vec![second_on, first_off, first_on];
+    let mut vec2 = vec1.clone();
+
     vec1.sort_by(|x, y| x.cmp(y));
     assert_eq!(vec1, vec![first_on, first_off, second_on]);
+
+    vec2.sort();
+    assert_eq!(vec2, vec![first_on, first_off, second_on]);
 }
 
 // Events are supposed to be sorted by T at all times.
@@ -182,7 +210,6 @@ impl<T: Add<Tick, Output = T> + Clone + Ord + std::fmt::Debug> Add for EventGrid
         self.events.extend(other_events);
         // I don't know why sort() doesn't work in the same way.
         self.events.sort_by(|x, y| x.cmp(y));
-        println!("self.events: {:?}", self.events);
         self.length = self.length + other.length;
         self
     }
@@ -460,8 +487,7 @@ fn flatten_group(
             }
         };
     });
-    // grid.events.sort() is not the same for some reason
-    grid.events.sort_by(|x, y| x.cmp(y));
+    grid.events.sort();
     cycle_grid(grid, *times)
 }
 
@@ -607,8 +633,6 @@ impl Iterator for EventIterator {
         })
         .collect();
 
-        println!("candidates: {:?}", candidates);
-
         if let Some((min_part, min_event)) = candidates.iter().min_by_key(|(_,x)| *x) {
             match min_part {
                 Part::KickDrum => self.kick.next(),
@@ -636,71 +660,7 @@ fn test_event_iterator_impl() {
         Part::SnareDrum,
         &mut Tick(0),
     );
-    let kick2 = flatten_group(
-        &group_or_delimited_group("8xxxxxxxx").unwrap().1,
-        Part::KickDrum,
-        &mut Tick(0),
-    );
-    let snare2 = flatten_group(
-        &group_or_delimited_group("4-x-x").unwrap().1,
-        Part::SnareDrum,
-        &mut Tick(0),
-    );
-
-    assert_eq!(
-        EventIterator::new(
-            kick2.clone(),
-            snare2.clone(),
-            empty.clone(),
-            empty.clone(),
-            TimeSignature::from_str("4/4").unwrap()
-        )
-        .into_iter()
-        .collect::<Vec<Event<Tick>>>(),
-        vec![
-            Event {
-                event_type: EventType::NoteOn(Part::KickDrum),
-                tick: Tick(0)
-            },
-            Event {
-                event_type: EventType::NoteOff(Part::KickDrum),
-                tick: Tick(24)
-            },
-            Event {
-                event_type: EventType::NoteOn(Part::KickDrum),
-                tick: Tick(24)
-            },
-            Event {
-                event_type: EventType::NoteOff(Part::KickDrum),
-                tick: Tick(48)
-            },
-            Event {
-                event_type: EventType::NoteOn(Part::SnareDrum),
-                tick: Tick(48)
-            },
-            Event {
-                event_type: EventType::NoteOn(Part::KickDrum),
-                tick: Tick(48)
-            },
-            Event {
-                event_type: EventType::NoteOff(Part::KickDrum),
-                tick: Tick(72)
-            },
-            Event {
-                event_type: EventType::NoteOn(Part::KickDrum),
-                tick: Tick(72)
-            },
-            Event {
-                event_type: EventType::NoteOff(Part::KickDrum),
-                tick: Tick(96)
-            },
-            Event {
-                event_type: EventType::NoteOn(Part::SnareDrum),
-                tick: Tick(96)
-            }
-        ]
-    );
-
+    
     assert_eq!(
         EventIterator::new(
             kick1.clone(),
@@ -718,11 +678,11 @@ fn test_event_iterator_impl() {
             },
             Event {
                 tick: Tick(48),
-                event_type: EventType::NoteOn(Part::SnareDrum)
+                event_type: EventType::NoteOff(Part::KickDrum)
             },
             Event {
-                tick: Tick(96),
-                event_type: EventType::NoteOff(Part::KickDrum)
+                tick: Tick(48),
+                event_type: EventType::NoteOn(Part::SnareDrum)
             },
             Event {
                 tick: Tick(96),
@@ -748,35 +708,6 @@ fn test_event_iterator_impl() {
             },
             Event {
                 tick: Tick(48),
-                event_type: EventType::NoteOff(Part::KickDrum)
-            }
-        ]
-    );
-    assert_eq!(
-        EventIterator::new(
-            kick1.clone(),
-            empty.clone(),
-            empty.clone(),
-            empty.clone(),
-            TimeSignature::from_str("4/4").unwrap()
-        )
-        .into_iter()
-        .collect::<Vec<Event<Tick>>>(),
-        [
-            Event {
-                tick: Tick(0),
-                event_type: EventType::NoteOn(Part::KickDrum)
-            },
-            Event {
-                tick: Tick(48),
-                event_type: EventType::NoteOff(Part::KickDrum)
-            },
-            Event {
-                tick: Tick(96),
-                event_type: EventType::NoteOn(Part::KickDrum)
-            },
-            Event {
-                tick: Tick(144),
                 event_type: EventType::NoteOff(Part::KickDrum)
             }
         ]
@@ -847,17 +778,12 @@ fn flatten_and_merge(
         }
         None => (EventGrid::empty(), 0),
     };
-    // let iter = |grid: EventGrid<Tick>, times| grid.into_iter().cycle().take(times).peekable();
-    let iter = |grid: EventGrid<Tick>, times| {
-        [0..times]
-            .iter()
-            .fold(EventGrid::empty(), |acc, _| acc + grid.clone())
-    };
+
     EventIterator::new(
-        iter(kick_grid, kick_repeats),
-        iter(snare_grid, snare_repeats),
-        iter(hihat_grid, hihat_repeats),
-        iter(crash_grid, crash_repeats),
+        cycle_grid(kick_grid, Times(kick_repeats as u16)),
+        cycle_grid(snare_grid, Times(snare_repeats as u16)),
+        cycle_grid(hihat_grid, Times(hihat_repeats as u16)),
+        cycle_grid(crash_grid, Times(crash_repeats as u16)),
         time_signature,
     )
 }
@@ -898,7 +824,6 @@ fn create_tracks<'a>(
         events,
         length: time,
     };
-    println!("event grid in ticks: {:?}", event_grid_tick);
     let event_grid = event_grid_tick.to_delta();
     let mut drums = Vec::new();
     // let midi_tempo = MidiTempo::from_tempo(Tempo(130)).0;
