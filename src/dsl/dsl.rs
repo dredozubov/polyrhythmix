@@ -55,6 +55,18 @@ impl KnownLength for BasicLength {
 }
 
 impl BasicLength {
+    pub(crate) fn to_power_of_2(&self) -> u8 {
+        match self {
+            BasicLength::Whole => todo!(),
+            BasicLength::Half => todo!(),
+            BasicLength::Fourth => todo!(),
+            BasicLength::Eighth => todo!(),
+            BasicLength::Sixteenth => todo!(),
+            BasicLength::ThirtySecond => todo!(),
+            BasicLength::SixtyFourth => todo!(),
+        }
+    }
+
     pub fn from_num(n: u16) -> Result<Self, String> {
         match n {
             64 => Ok(BasicLength::SixtyFourth),

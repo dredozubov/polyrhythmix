@@ -18,9 +18,9 @@ use crate::dsl::dsl::{
     group_or_delimited_group, groups, BasicLength, Group, GroupOrNote, Groups, KnownLength, Length,
     ModdedLength, Note, Times,
 };
+use crate::midi::time::TimeSignature;
 use GroupOrNote::*;
 use Note::*;
-use crate::midi::time::TimeSignature;
 
 #[allow(dead_code)]
 static BAR_LIMIT: u32 = 1000;
@@ -128,10 +128,7 @@ where
     }
 
     fn le(&self, other: &Self) -> bool {
-        matches!(
-            self.partial_cmp(other),
-            Some(Less | Equal)
-        )
+        matches!(self.partial_cmp(other), Some(Less | Equal))
     }
 
     fn gt(&self, other: &Self) -> bool {
@@ -139,10 +136,7 @@ where
     }
 
     fn ge(&self, other: &Self) -> bool {
-        matches!(
-            self.partial_cmp(other),
-            Some(Greater | Equal)
-        )
+        matches!(self.partial_cmp(other), Some(Greater | Equal))
     }
 }
 
@@ -429,7 +423,7 @@ impl Length {
 }
 
 #[allow(dead_code)]
-static MICROSECONDS_PER_BPM: u128 = 500000 as u128 / TICKS_PER_QUARTER_NOTE as u128;
+static MICROSECONDS_PER_BPM: u128 = 50000 as u128 / TICKS_PER_QUARTER_NOTE as u128;
 
 #[allow(dead_code)]
 static MIDI_CLOCKS_PER_CLICK: u8 = 24;
@@ -450,12 +444,12 @@ static MIDI_CLOCKS_PER_CLICK: u8 = 24;
 )]
 pub struct MidiTempo(u24);
 
-// impl MidiTempo {
-//     fn from_tempo(Tempo(t): Tempo) -> Self {
-//         let mt = t as u32 * MICROSECONDS_PER_BPM as u32;
-//         Self(u24::from(mt))
-//     }
-// }
+impl MidiTempo {
+    fn from_tempo(tempo: u16) -> Self {
+        let mt = tempo as u32 * MICROSECONDS_PER_BPM as u32;
+        Self(mt.into())
+    }
+}
 
 /// Returns an EventGrid and a total length. Length is needed as a group can end with rests that are not in the grid,
 /// and we need it to cycle the group.
@@ -742,7 +736,11 @@ fn flatten_and_merge(
         .unwrap_or(BAR_LIMIT.clone());
     println!("Converges over {} bars", converges_over_bars);
     let length_limit = converges_over_bars * time_signature.to_128th();
-    println!("TimeSignature {:?} in 128th: {}", time_signature, time_signature.to_128th());
+    println!(
+        "TimeSignature {:?} in 128th: {}",
+        time_signature,
+        time_signature.to_128th()
+    );
     println!("length limit in 128th notes: {}", length_limit);
     let (kick_grid, kick_repeats) = match groups.get(&KickDrum) {
         Some(groups) => {
@@ -805,30 +803,96 @@ fn flatten_and_merge(
 
 #[test]
 fn test_flatten_and_merge() {
-    let kick_events = vec![ Event { tick: Tick(0), event_type: NoteOn(KickDrum), }, Event { tick: Tick(12), event_type: NoteOff(KickDrum), }, Event { tick: Tick(12), event_type: NoteOn(KickDrum), }, Event { tick: Tick(24), event_type: NoteOff(KickDrum), }, Event { tick: Tick(36), event_type: NoteOn(KickDrum), }, Event { tick: Tick(48), event_type: NoteOff(KickDrum), }, Event { tick: Tick(60), event_type: NoteOn(KickDrum), }, Event { tick: Tick(72), event_type: NoteOff(KickDrum), }, Event { tick: Tick(72), event_type: NoteOn(KickDrum), }, Event { tick: Tick(84), event_type: NoteOff(KickDrum), }, ];
-    let snare_events = [Event { tick: Tick(24), event_type: NoteOn(SnareDrum) }, Event { tick: Tick(48), event_type: NoteOff(SnareDrum) }, Event { tick: Tick(96), event_type: NoteOn(SnareDrum) }, Event { tick: Tick(120), event_type: NoteOff(SnareDrum) }];
+    let kick_events = vec![
+        Event {
+            tick: Tick(0),
+            event_type: NoteOn(KickDrum),
+        },
+        Event {
+            tick: Tick(12),
+            event_type: NoteOff(KickDrum),
+        },
+        Event {
+            tick: Tick(12),
+            event_type: NoteOn(KickDrum),
+        },
+        Event {
+            tick: Tick(24),
+            event_type: NoteOff(KickDrum),
+        },
+        Event {
+            tick: Tick(36),
+            event_type: NoteOn(KickDrum),
+        },
+        Event {
+            tick: Tick(48),
+            event_type: NoteOff(KickDrum),
+        },
+        Event {
+            tick: Tick(60),
+            event_type: NoteOn(KickDrum),
+        },
+        Event {
+            tick: Tick(72),
+            event_type: NoteOff(KickDrum),
+        },
+        Event {
+            tick: Tick(72),
+            event_type: NoteOn(KickDrum),
+        },
+        Event {
+            tick: Tick(84),
+            event_type: NoteOff(KickDrum),
+        },
+    ];
+    let snare_events = [
+        Event {
+            tick: Tick(24),
+            event_type: NoteOn(SnareDrum),
+        },
+        Event {
+            tick: Tick(48),
+            event_type: NoteOff(SnareDrum),
+        },
+        Event {
+            tick: Tick(96),
+            event_type: NoteOn(SnareDrum),
+        },
+        Event {
+            tick: Tick(120),
+            event_type: NoteOff(SnareDrum),
+        },
+    ];
     let four_fourth = TimeSignature::from_str("4/4").unwrap();
     // let kick_event_grid = EventGrid { events, length: Tick(48 * 4) };
     let flattened_kick = flatten_and_merge(
         HashMap::from_iter([(KickDrum, groups("16xx-x-xx-").unwrap().1)]),
-        four_fourth
-    ).collect::<Vec<Event<Tick>>>();
+        four_fourth,
+    )
+    .collect::<Vec<Event<Tick>>>();
     let flattened_snare = flatten_and_merge(
         HashMap::from_iter([(SnareDrum, groups("8-x--x-").unwrap().1)]),
-        four_fourth
-    ).collect::<Vec<Event<Tick>>>();
+        four_fourth,
+    )
+    .collect::<Vec<Event<Tick>>>();
     let flattened_kick_and_snare = flatten_and_merge(
         HashMap::from_iter([
             (KickDrum, groups("16xx-x-xx-").unwrap().1),
-            (SnareDrum, groups("8-x--x-").unwrap().1)
+            (SnareDrum, groups("8-x--x-").unwrap().1),
         ]),
-        four_fourth
-    ).collect::<Vec<Event<Tick>>>();
+        four_fourth,
+    )
+    .collect::<Vec<Event<Tick>>>();
 
     assert_eq!(flattened_kick, kick_events);
     assert_eq!(flattened_snare, snare_events);
 
-    assert_eq!(flattened_kick.iter().all(|x| flattened_kick_and_snare.contains(x)), true);
+    assert_eq!(
+        flattened_kick
+            .iter()
+            .all(|x| flattened_kick_and_snare.contains(x)),
+        true
+    );
 }
 
 // The length of a beat is not standard, so in order to fully describe the length of a MIDI tick the MetaMessage::Tempo event should be present.
@@ -870,15 +934,48 @@ fn create_tracks<'a>(
     };
     let event_grid = event_grid_tick.to_delta();
     let mut drums = Vec::new();
-    // let midi_tempo = MidiTempo::from_tempo(Tempo(130)).0;
-    drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Midi { channel: 9.into(), message: MidiMessage::ProgramChange { program: 127.into() } } } );
-    // drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::TrackNumber(1.into())) });
-    drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::TrackName(b"Drumkit")) });
-    // drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::InstrumentName(b"Drum kit")) });
-    drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::MidiChannel(10.into())) });
-    drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::MidiPort(10.into())) });
+
+    // This is likely to be specific to Guitar Pro. Tested with Guitar Pro 7.
+    drums.push(TrackEvent {
+        delta: 0.into(),
+        kind: TrackEventKind::Midi {
+            channel: 9.into(),
+            message: MidiMessage::ProgramChange { program: 0.into() },
+        },
+    });
+    drums.push(TrackEvent {
+        delta: 0.into(),
+        kind: TrackEventKind::Meta(MetaMessage::TrackName(b"Drumkit")),
+    });
+    drums.push(TrackEvent {
+        delta: 0.into(),
+        kind: TrackEventKind::Meta(MetaMessage::InstrumentName(b"Drumkit")),
+    });
+    drums.push(TrackEvent {
+        delta: 0.into(),
+        kind: TrackEventKind::Meta(MetaMessage::MidiChannel(10.into())),
+    });
+    drums.push(TrackEvent {
+        delta: 0.into(),
+        kind: TrackEventKind::Meta(MetaMessage::MidiPort(10.into())),
+    });
+
+    let midi_tempo = MidiTempo::from_tempo(130).0;
     // drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::Tempo(midi_tempo)) });
-    // drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::TimeSignature(4, 4, MIDI_CLOCKS_PER_CLICK.clone(), 8))});
+
+    let (midi_time_signature_numerator, midi_time_signature_denominator) =
+        time_signature.to_midi();
+    println!("Midi time signature: {}, {}", midi_time_signature_numerator, midi_time_signature_denominator);
+    drums.push(TrackEvent {
+        delta: 0.into(),
+        kind: TrackEventKind::Meta(MetaMessage::TimeSignature(
+            midi_time_signature_numerator,
+            midi_time_signature_denominator,
+            MIDI_CLOCKS_PER_CLICK.clone(),
+            8,
+        )),
+    });
+
     for event in event_grid.events {
         let midi_message = match event.event_type {
             NoteOn(part) => MidiMessage::NoteOn {
@@ -898,7 +995,10 @@ fn create_tracks<'a>(
             },
         })
     }
-    drums.push(TrackEvent { delta: drums.last().unwrap().delta, kind: TrackEventKind::Meta(MetaMessage::EndOfTrack) });
+    drums.push(TrackEvent {
+        delta: drums.last().unwrap().delta,
+        kind: TrackEventKind::Meta(MetaMessage::EndOfTrack),
+    });
 
     vec![drums]
 }

@@ -14,11 +14,24 @@ pub struct TimeSignature {
 }
 
 impl TimeSignature {
-    pub fn new(numerator: u8, denominator: BasicLength) -> Self {
+    pub(crate) fn new(numerator: u8, denominator: BasicLength) -> Self {
         Self {
             numerator,
             denominator,
         }
+    }
+
+    pub(crate) fn to_midi(&self) -> (u8, u8) {
+        let denominator = match self.denominator {
+            Whole => 0, // FIXME: should it be an error?
+            Half => 1,
+            Fourth => 2,
+            Eighth => 3,
+            Sixteenth => 4,
+            ThirtySecond => 5,
+            SixtyFourth => 6,
+        };
+        (self.numerator, denominator)
     }
 }
 
