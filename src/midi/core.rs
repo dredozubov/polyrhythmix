@@ -871,17 +871,23 @@ fn create_tracks<'a>(
     let event_grid = event_grid_tick.to_delta();
     let mut drums = Vec::new();
     // let midi_tempo = MidiTempo::from_tempo(Tempo(130)).0;
-    // drums.push(TrackEvent { delta: u28::from(0), kind: TrackEventKind::Meta(MetaMessage::Tempo(midi_tempo)) });
-    // drums.push(TrackEvent { delta: u28::from(0), kind: TrackEventKind::Meta(MetaMessage::TimeSignature(4, 4, MIDI_CLOCKS_PER_CLICK.clone(), 8))});
+    drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Midi { channel: 9.into(), message: MidiMessage::ProgramChange { program: 127.into() } } } );
+    // drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::TrackNumber(1.into())) });
+    drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::TrackName(b"Drumkit")) });
+    // drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::InstrumentName(b"Drum kit")) });
+    drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::MidiChannel(10.into())) });
+    drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::MidiPort(10.into())) });
+    // drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::Tempo(midi_tempo)) });
+    // drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::TimeSignature(4, 4, MIDI_CLOCKS_PER_CLICK.clone(), 8))});
     for event in event_grid.events {
         let midi_message = match event.event_type {
             NoteOn(part) => MidiMessage::NoteOn {
                 key: part.to_midi_key(),
-                vel: u7::from(120),
+                vel: 127.into(),
             },
             NoteOff(part) => MidiMessage::NoteOff {
                 key: part.to_midi_key(),
-                vel: u7::from(0),
+                vel: 127.into(),
             },
         };
         drums.push(TrackEvent {
@@ -892,6 +898,7 @@ fn create_tracks<'a>(
             },
         })
     }
+    drums.push(TrackEvent { delta: drums.last().unwrap().delta, kind: TrackEventKind::Meta(MetaMessage::EndOfTrack) });
 
     vec![drums]
 }
