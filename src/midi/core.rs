@@ -423,7 +423,7 @@ impl Length {
 }
 
 #[allow(dead_code)]
-static MICROSECONDS_PER_BPM: u128 = 50000 as u128 / TICKS_PER_QUARTER_NOTE as u128;
+static MICROSECONDS_PER_MINUTE: u128 = 60000000 as u128;
 
 #[allow(dead_code)]
 static MIDI_CLOCKS_PER_CLICK: u8 = 24;
@@ -446,7 +446,7 @@ pub struct MidiTempo(u24);
 
 impl MidiTempo {
     fn from_tempo(tempo: u16) -> Self {
-        let mt = tempo as u32 * MICROSECONDS_PER_BPM as u32;
+        let mt = MICROSECONDS_PER_MINUTE as u32 / tempo as u32;
         Self(mt.into())
     }
 }
@@ -736,18 +736,11 @@ fn flatten_and_merge(
         .unwrap_or(BAR_LIMIT.clone());
     println!("Converges over {} bars", converges_over_bars);
     let length_limit = converges_over_bars * time_signature.to_128th();
-    println!(
-        "TimeSignature {:?} in 128th: {}",
-        time_signature,
-        time_signature.to_128th()
-    );
-    println!("length limit in 128th notes: {}", length_limit);
     let (kick_grid, kick_repeats) = match groups.get(&KickDrum) {
         Some(groups) => {
             let length_128th = length_map.get(&KickDrum).unwrap();
             let number_of_groups = groups.0.len();
             let times = length_limit / length_128th;
-            // let iterator = flatten_groups(KickDrum, groups).into_iter().cycle().take(number_of_groups * times as usize).peekable()
             (
                 flatten_groups(KickDrum, groups),
                 number_of_groups * times as usize,
@@ -896,8 +889,8 @@ fn test_flatten_and_merge() {
 }
 
 // The length of a beat is not standard, so in order to fully describe the length of a MIDI tick the MetaMessage::Tempo event should be present.
-pub fn create_smf<'a>(groups: HashMap<Part, Groups>, time_signature: TimeSignature) -> Smf<'a> {
-    let tracks = create_tracks(groups, time_signature); // FIXME
+pub fn create_smf<'a>(groups: HashMap<Part, Groups>, time_signature: TimeSignature, text: &'a str, tempo: u16) -> Smf<'a> {
+    let tracks = create_tracks(groups, time_signature, text, MidiTempo::from_tempo(tempo)); // FIXME
                                                         // https://majicdesigns.github.io/MD_MIDIFile/page_timing.html
                                                         // says " If it is not specified the MIDI default is 48 ticks per quarter note."
                                                         // As it's required in `Header`, let's use the same value.
@@ -912,15 +905,25 @@ pub fn create_smf<'a>(groups: HashMap<Part, Groups>, time_signature: TimeSignatu
 }
 
 /// Translates drum parts to a single MIDI track.
+/// 
+/// /// # Arguments
+///
+/// * `parts_and_groups` - Drum parts parsed from the command line.
+/// * `time_signature` - Time signature parsed from the command line.
+/// * `text_event` - Text message to be embedded into the MIDI file.
+/// 
+/// # Returns
+/// 
+/// Multi-track vectors of MIDI events in `midly` format.
+/// 
 fn create_tracks<'a>(
     parts_and_groups: HashMap<Part, Groups>,
     time_signature: TimeSignature,
-    // tempo: u32
+    text_event: &'a str,
+    midi_tempo: MidiTempo
 ) -> Vec<Vec<midly::TrackEvent<'a>>> {
-    //FIXME: unhardcode time signature
     let events_iter = flatten_and_merge(parts_and_groups, time_signature);
     let events: Vec<Event<Tick>> = events_iter.collect();
-    println!("events: {:?}", events);
     // Notice this time can be incorrect, but it shouldn't matter.
     let time = match events.last() {
         Some(ev) => ev.tick,
@@ -960,12 +963,10 @@ fn create_tracks<'a>(
         kind: TrackEventKind::Meta(MetaMessage::MidiPort(10.into())),
     });
 
-    let midi_tempo = MidiTempo::from_tempo(130).0;
-    // drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::Tempo(midi_tempo)) });
+    drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::Tempo(midi_tempo.0)) });
 
     let (midi_time_signature_numerator, midi_time_signature_denominator) =
         time_signature.to_midi();
-    println!("Midi time signature: {}, {}", midi_time_signature_numerator, midi_time_signature_denominator);
     drums.push(TrackEvent {
         delta: 0.into(),
         kind: TrackEventKind::Meta(MetaMessage::TimeSignature(
@@ -975,6 +976,9 @@ fn create_tracks<'a>(
             8,
         )),
     });
+
+    // println!("{:?}", text_event.as_bytes());
+    // drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::Text("!!!!!!!".as_bytes())) });
 
     for event in event_grid.events {
         let midi_message = match event.event_type {
