@@ -796,66 +796,7 @@ fn flatten_and_merge(
 
 #[test]
 fn test_flatten_and_merge() {
-    let kick_events = vec![
-        Event {
-            tick: Tick(0),
-            event_type: NoteOn(KickDrum),
-        },
-        Event {
-            tick: Tick(12),
-            event_type: NoteOff(KickDrum),
-        },
-        Event {
-            tick: Tick(12),
-            event_type: NoteOn(KickDrum),
-        },
-        Event {
-            tick: Tick(24),
-            event_type: NoteOff(KickDrum),
-        },
-        Event {
-            tick: Tick(36),
-            event_type: NoteOn(KickDrum),
-        },
-        Event {
-            tick: Tick(48),
-            event_type: NoteOff(KickDrum),
-        },
-        Event {
-            tick: Tick(60),
-            event_type: NoteOn(KickDrum),
-        },
-        Event {
-            tick: Tick(72),
-            event_type: NoteOff(KickDrum),
-        },
-        Event {
-            tick: Tick(72),
-            event_type: NoteOn(KickDrum),
-        },
-        Event {
-            tick: Tick(84),
-            event_type: NoteOff(KickDrum),
-        },
-    ];
-    let snare_events = [
-        Event {
-            tick: Tick(24),
-            event_type: NoteOn(SnareDrum),
-        },
-        Event {
-            tick: Tick(48),
-            event_type: NoteOff(SnareDrum),
-        },
-        Event {
-            tick: Tick(96),
-            event_type: NoteOn(SnareDrum),
-        },
-        Event {
-            tick: Tick(120),
-            event_type: NoteOff(SnareDrum),
-        },
-    ];
+    let kick_events = vec![Event { tick: Tick(0), event_type: NoteOn(KickDrum) }, Event { tick: Tick(12), event_type: NoteOff(KickDrum) }, Event { tick: Tick(12), event_type: NoteOn(KickDrum) }, Event { tick: Tick(24), event_type: NoteOff(KickDrum) }, Event { tick: Tick(36), event_type: NoteOn(KickDrum) }, Event { tick: Tick(48), event_type: NoteOff(KickDrum) }, Event { tick: Tick(60), event_type: NoteOn(KickDrum) }, Event { tick: Tick(72), event_type: NoteOff(KickDrum) }, Event { tick: Tick(72), event_type: NoteOn(KickDrum) }, Event { tick: Tick(84), event_type: NoteOff(KickDrum) }]; let snare_events = [Event { tick: Tick(24), event_type: NoteOn(SnareDrum) }, Event { tick: Tick(48), event_type: NoteOff(SnareDrum) }, Event { tick: Tick(96), event_type: NoteOn(SnareDrum) }, Event { tick: Tick(120), event_type: NoteOff(SnareDrum) }];
     let four_fourth = TimeSignature::from_str("4/4").unwrap();
     // let kick_event_grid = EventGrid { events, length: Tick(48 * 4) };
     let flattened_kick = flatten_and_merge(
@@ -882,6 +823,9 @@ fn test_flatten_and_merge() {
 
     assert_eq!(
         flattened_kick
+            .iter()
+            .all(|x| flattened_kick_and_snare.contains(x)) &&
+        flattened_snare
             .iter()
             .all(|x| flattened_kick_and_snare.contains(x)),
         true
@@ -976,9 +920,8 @@ fn create_tracks<'a>(
             8,
         )),
     });
-
-    // println!("{:?}", text_event.as_bytes());
-    // drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::Text("!!!!!!!".as_bytes())) });
+    
+    drums.push(TrackEvent { delta: 0.into(), kind: TrackEventKind::Meta(MetaMessage::Text(text_event.as_bytes())) });
 
     for event in event_grid.events {
         let midi_message = match event.event_type {

@@ -96,7 +96,6 @@ fn test_cmp_time_signature() {
 
 impl KnownLength for TimeSignature {
     fn to_128th(&self) -> u32 {
-        println!("{}", self.denominator.to_128th());
         self.denominator.to_128th() * self.numerator as u32
     }
 }
@@ -109,7 +108,6 @@ fn test_time_signature_known_length() {
 impl TimeSignature {
     pub fn converges<T: KnownLength, I: IntoIterator<Item = T>>(&self, multiple: I) -> Result<u32, String> {
         let bar_len = self.to_128th();
-        println!("bar_len: {}", bar_len);
         let result = multiple
             .into_iter()
             .fold(bar_len, |acc, t| lowest_common_divisor(t.to_128th(), acc));
