@@ -1,11 +1,12 @@
 extern crate derive_more;
 use std::cmp::Ordering;
+use std::cmp::Ordering::*;
 use std::collections::{BTreeMap, HashMap};
 use std::iter::Peekable;
 use std::iter::{Cycle, Take};
 use std::ops::{Add, Mul};
-use std::str::FromStr;
 use std::path::Iter;
+use std::str::FromStr;
 use std::time;
 
 use midly::{
@@ -17,6 +18,8 @@ use crate::dsl::dsl::{
     group_or_delimited_group, groups, BasicLength, Group, GroupOrNote, Groups, KnownLength, Length,
     ModdedLength, Note, Times,
 };
+use GroupOrNote::*;
+use Note::*;
 use crate::midi::time::TimeSignature;
 
 #[allow(dead_code)]
@@ -64,19 +67,21 @@ pub enum EventType {
     NoteOff(Part),
 }
 
+use EventType::*;
+
 impl Ord for EventType {
     fn cmp(&self, other: &EventType) -> Ordering {
         match (self, other) {
-            (EventType::NoteOn(a), EventType::NoteOn(b)) => a.cmp(b),
-            (EventType::NoteOn(a), EventType::NoteOff(b)) => match a.cmp(b) {
-                Ordering::Equal => Ordering::Greater,
-                ord => ord
+            (NoteOn(a), NoteOn(b)) => a.cmp(b),
+            (NoteOn(a), NoteOff(b)) => match a.cmp(b) {
+                Equal => Greater,
+                ord => ord,
             },
-            (EventType::NoteOff(a), EventType::NoteOn(b)) => match a.cmp(b) {
-                Ordering::Equal => Ordering::Less,
-                ord => ord
+            (NoteOff(a), NoteOn(b)) => match a.cmp(b) {
+                Equal => Less,
+                ord => ord,
             },
-            (EventType::NoteOff(a), EventType::NoteOff(b)) => a.cmp(b),
+            (NoteOff(a), NoteOff(b)) => a.cmp(b),
         }
     }
 }
@@ -89,14 +94,16 @@ pub enum Part {
     CrashCymbal,
 }
 
+use Part::*;
+
 impl Part {
     // https://computermusicresource.com/GM.Percussion.KeyMap.html
     fn to_midi_key(&self) -> u7 {
         match self {
-            Part::KickDrum => u7::from(36),
-            Part::SnareDrum => u7::from(38),
-            Part::HiHat => u7::from(46),
-            Part::CrashCymbal => u7::from(49),
+            KickDrum => u7::from(36),
+            SnareDrum => u7::from(38),
+            HiHat => u7::from(46),
+            CrashCymbal => u7::from(49),
         }
     }
 }
@@ -110,26 +117,32 @@ pub struct Event<T> {
 impl<T> PartialOrd for Event<T>
 where
     T: PartialOrd + Ord,
-    Event<T>: Ord
+    Event<T>: Ord,
 {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 
     fn lt(&self, other: &Self) -> bool {
-        matches!(self.partial_cmp(other), Some(Ordering::Less))
+        matches!(self.partial_cmp(other), Some(Less))
     }
 
     fn le(&self, other: &Self) -> bool {
-        matches!(self.partial_cmp(other), Some(Ordering::Less | Ordering::Equal))
+        matches!(
+            self.partial_cmp(other),
+            Some(Less | Equal)
+        )
     }
 
     fn gt(&self, other: &Self) -> bool {
-        matches!(self.partial_cmp(other), Some(Ordering::Greater))
+        matches!(self.partial_cmp(other), Some(Greater))
     }
 
     fn ge(&self, other: &Self) -> bool {
-        matches!(self.partial_cmp(other), Some(Ordering::Greater | Ordering::Equal))
+        matches!(
+            self.partial_cmp(other),
+            Some(Greater | Equal)
+        )
     }
 }
 
@@ -150,18 +163,18 @@ where
 fn test_ord_event_t() {
     let first_on = Event {
         tick: Tick(0),
-        event_type: EventType::NoteOn(Part::KickDrum),
+        event_type: NoteOn(KickDrum),
     };
     let first_off = Event {
         tick: Tick(24),
-        event_type: EventType::NoteOff(Part::KickDrum),
+        event_type: NoteOff(KickDrum),
     };
     let second_on = Event {
         tick: Tick(24),
-        event_type: EventType::NoteOn(Part::KickDrum),
+        event_type: NoteOn(KickDrum),
     };
-    assert_eq!(first_on.cmp(&first_off), Ordering::Less);
-    assert_eq!(first_off.cmp(&second_on), Ordering::Less);
+    assert_eq!(first_on.cmp(&first_off), Less);
+    assert_eq!(first_off.cmp(&second_on), Less);
 
     let mut vec1 = vec![second_on, first_off, first_on];
     let mut vec2 = vec1.clone();
@@ -234,11 +247,11 @@ fn test_arith_event_grids() {
         events: vec![
             Event {
                 tick: Tick(0),
-                event_type: EventType::NoteOn(Part::KickDrum),
+                event_type: NoteOn(KickDrum),
             },
             Event {
                 tick: Tick(TICKS_PER_QUARTER_NOTE as u128),
-                event_type: EventType::NoteOff(Part::KickDrum),
+                event_type: NoteOff(KickDrum),
             },
         ],
         length: Tick(TICKS_PER_QUARTER_NOTE as u128),
@@ -247,11 +260,11 @@ fn test_arith_event_grids() {
         events: vec![
             Event {
                 tick: Tick(24),
-                event_type: EventType::NoteOn(Part::HiHat),
+                event_type: NoteOn(HiHat),
             },
             Event {
                 tick: Tick(TICKS_PER_QUARTER_NOTE as u128),
-                event_type: EventType::NoteOff(Part::HiHat),
+                event_type: NoteOff(HiHat),
             },
         ],
         length: Tick(TICKS_PER_QUARTER_NOTE as u128),
@@ -260,19 +273,19 @@ fn test_arith_event_grids() {
         events: vec![
             Event {
                 tick: Tick(0),
-                event_type: EventType::NoteOn(Part::KickDrum),
+                event_type: NoteOn(KickDrum),
             },
             Event {
                 tick: Tick(24),
-                event_type: EventType::NoteOn(Part::HiHat),
+                event_type: NoteOn(HiHat),
             },
             Event {
                 tick: Tick(48),
-                event_type: EventType::NoteOff(Part::KickDrum),
+                event_type: NoteOff(KickDrum),
             },
             Event {
                 tick: Tick(48),
-                event_type: EventType::NoteOff(Part::HiHat),
+                event_type: NoteOff(HiHat),
             },
         ],
         length: Tick(96),
@@ -286,11 +299,11 @@ fn test_add_event_grid() {
     let empty: EventGrid<Tick> = EventGrid::empty();
     let kick_on = Event {
         tick: Tick(0),
-        event_type: EventType::NoteOn(Part::KickDrum),
+        event_type: NoteOn(KickDrum),
     };
     let kick_off = Event {
         tick: Tick(24),
-        event_type: EventType::NoteOff(Part::KickDrum),
+        event_type: NoteOff(KickDrum),
     };
     let simple_grid = EventGrid {
         events: vec![kick_on, kick_off],
@@ -305,19 +318,19 @@ fn test_add_event_grid() {
             events: vec![
                 Event {
                     tick: Tick(0),
-                    event_type: EventType::NoteOn(Part::KickDrum)
+                    event_type: NoteOn(KickDrum)
                 },
                 Event {
                     tick: Tick(24),
-                    event_type: EventType::NoteOff(Part::KickDrum)
+                    event_type: NoteOff(KickDrum)
                 },
                 Event {
                     tick: Tick(48),
-                    event_type: EventType::NoteOn(Part::KickDrum)
+                    event_type: NoteOn(KickDrum)
                 },
                 Event {
                     tick: Tick(72),
-                    event_type: EventType::NoteOff(Part::KickDrum)
+                    event_type: NoteOff(KickDrum)
                 }
             ],
             length: Tick(96)
@@ -460,25 +473,25 @@ fn flatten_group(
     let mut grid = EventGrid::empty();
     notes.iter().for_each(|entry| {
         match entry {
-            crate::dsl::dsl::GroupOrNote::SingleGroup(group) => {
+            SingleGroup(group) => {
                 let mut eg = flatten_group(&group, part, time);
                 grid.events.append(&mut eg.events);
                 grid.length = grid.length + eg.length;
             }
-            crate::dsl::dsl::GroupOrNote::SingleNote(Note::Rest) => {
+            SingleNote(Note::Rest) => {
                 let rest_end = *time + note_length;
                 *time = rest_end;
                 grid.length = rest_end;
             }
-            crate::dsl::dsl::GroupOrNote::SingleNote(Note::Hit) => {
+            SingleNote(Note::Hit) => {
                 let note_end = *time + note_length;
                 let note_on = Event {
                     tick: *time,
-                    event_type: EventType::NoteOn(part),
+                    event_type: NoteOn(part),
                 };
                 let note_off = Event {
                     tick: note_end,
-                    event_type: EventType::NoteOff(part),
+                    event_type: NoteOff(part),
                 };
                 grid.events.push(note_on);
                 grid.events.push(note_off);
@@ -496,26 +509,26 @@ fn test_flatten_group() {
     assert_eq!(
         flatten_group(
             &group_or_delimited_group("(2,8x--)").unwrap().1,
-            Part::KickDrum,
+            KickDrum,
             &mut Tick(0)
         ),
         EventGrid {
             events: vec![
                 Event {
                     tick: Tick(0),
-                    event_type: EventType::NoteOn(Part::KickDrum)
+                    event_type: NoteOn(KickDrum)
                 },
                 Event {
                     tick: Tick(24),
-                    event_type: EventType::NoteOff(Part::KickDrum)
+                    event_type: NoteOff(KickDrum)
                 },
                 Event {
                     tick: Tick(72),
-                    event_type: EventType::NoteOn(Part::KickDrum)
+                    event_type: NoteOn(KickDrum)
                 },
                 Event {
                     tick: Tick(96),
-                    event_type: EventType::NoteOff(Part::KickDrum)
+                    event_type: NoteOff(KickDrum)
                 }
             ],
             length: Tick(144)
@@ -537,11 +550,11 @@ fn test_cycle_grid() {
     assert_eq!(cycle_grid(EventGrid::empty(), Times(2)), empty);
     let kick_on = Event {
         tick: Tick(0),
-        event_type: EventType::NoteOn(Part::KickDrum),
+        event_type: NoteOn(KickDrum),
     };
     let kick_off = Event {
         tick: Tick(24),
-        event_type: EventType::NoteOff(Part::KickDrum),
+        event_type: NoteOff(KickDrum),
     };
     let simple_grid = EventGrid {
         events: vec![kick_on, kick_off],
@@ -555,19 +568,19 @@ fn test_cycle_grid() {
             events: vec![
                 Event {
                     tick: Tick(0),
-                    event_type: EventType::NoteOn(Part::KickDrum)
+                    event_type: NoteOn(KickDrum)
                 },
                 Event {
                     tick: Tick(24),
-                    event_type: EventType::NoteOff(Part::KickDrum)
+                    event_type: NoteOff(KickDrum)
                 },
                 Event {
                     tick: Tick(48),
-                    event_type: EventType::NoteOn(Part::KickDrum)
+                    event_type: NoteOn(KickDrum)
                 },
                 Event {
                     tick: Tick(72),
-                    event_type: EventType::NoteOff(Part::KickDrum)
+                    event_type: NoteOff(KickDrum)
                 }
             ],
             length: Tick(96)
@@ -621,10 +634,10 @@ impl Iterator for EventIterator {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let candidates: BTreeMap<Part, Event<Tick>> = [
-            (Part::KickDrum, self.kick.peek()),
-            (Part::SnareDrum, self.snare.peek()),
-            (Part::HiHat, self.hihat.peek()),
-            (Part::CrashCymbal, self.crash.peek()),
+            (KickDrum, self.kick.peek()),
+            (SnareDrum, self.snare.peek()),
+            (HiHat, self.hihat.peek()),
+            (CrashCymbal, self.crash.peek()),
         ]
         .into_iter()
         .filter_map(|(p, x)| match x {
@@ -633,17 +646,17 @@ impl Iterator for EventIterator {
         })
         .collect();
 
-        if let Some((min_part, min_event)) = candidates.iter().min_by_key(|(_,x)| *x) {
+        if let Some((min_part, min_event)) = candidates.iter().min_by_key(|(_, x)| *x) {
             match min_part {
-                Part::KickDrum => self.kick.next(),
-                Part::SnareDrum => self.snare.next(),
-                Part::HiHat => self.hihat.next(),
-                Part::CrashCymbal => self.crash.next(),
+                KickDrum => self.kick.next(),
+                SnareDrum => self.snare.next(),
+                HiHat => self.hihat.next(),
+                CrashCymbal => self.crash.next(),
             };
             Some(*min_event)
         } else {
             None
-        }         
+        }
     }
 }
 
@@ -652,15 +665,15 @@ fn test_event_iterator_impl() {
     let empty = EventGrid::empty();
     let kick1 = flatten_group(
         &group_or_delimited_group("(4x-)").unwrap().1,
-        Part::KickDrum,
+        KickDrum,
         &mut Tick(0),
     );
     let snare1 = flatten_group(
         &group_or_delimited_group("4-x").unwrap().1,
-        Part::SnareDrum,
+        SnareDrum,
         &mut Tick(0),
     );
-    
+
     assert_eq!(
         EventIterator::new(
             kick1.clone(),
@@ -674,19 +687,19 @@ fn test_event_iterator_impl() {
         vec![
             Event {
                 tick: Tick(0),
-                event_type: EventType::NoteOn(Part::KickDrum)
+                event_type: NoteOn(KickDrum)
             },
             Event {
                 tick: Tick(48),
-                event_type: EventType::NoteOff(Part::KickDrum)
+                event_type: NoteOff(KickDrum)
             },
             Event {
                 tick: Tick(48),
-                event_type: EventType::NoteOn(Part::SnareDrum)
+                event_type: NoteOn(SnareDrum)
             },
             Event {
                 tick: Tick(96),
-                event_type: EventType::NoteOff(Part::SnareDrum)
+                event_type: NoteOff(SnareDrum)
             }
         ]
     );
@@ -704,11 +717,11 @@ fn test_event_iterator_impl() {
         [
             Event {
                 tick: Tick(0),
-                event_type: EventType::NoteOn(Part::KickDrum)
+                event_type: NoteOn(KickDrum)
             },
             Event {
                 tick: Tick(48),
-                event_type: EventType::NoteOff(Part::KickDrum)
+                event_type: NoteOff(KickDrum)
             }
         ]
     );
@@ -727,52 +740,54 @@ fn flatten_and_merge(
     let converges_over_bars = time_signature
         .converges(groups.values())
         .unwrap_or(BAR_LIMIT.clone());
+    println!("Converges over {} bars", converges_over_bars);
     let length_limit = converges_over_bars * time_signature.to_128th();
-
-    let (kick_grid, kick_repeats) = match groups.get(&Part::KickDrum) {
+    println!("TimeSignature {:?} in 128th: {}", time_signature, time_signature.to_128th());
+    println!("length limit in 128th notes: {}", length_limit);
+    let (kick_grid, kick_repeats) = match groups.get(&KickDrum) {
         Some(groups) => {
-            let length_128th = length_map.get(&Part::KickDrum).unwrap();
+            let length_128th = length_map.get(&KickDrum).unwrap();
             let number_of_groups = groups.0.len();
             let times = length_limit / length_128th;
-            // let iterator = flatten_groups(Part::KickDrum, groups).into_iter().cycle().take(number_of_groups * times as usize).peekable()
+            // let iterator = flatten_groups(KickDrum, groups).into_iter().cycle().take(number_of_groups * times as usize).peekable()
             (
-                flatten_groups(Part::KickDrum, groups),
+                flatten_groups(KickDrum, groups),
                 number_of_groups * times as usize,
             )
         }
         None => (EventGrid::empty(), 0),
     };
-    let (snare_grid, snare_repeats) = match groups.get(&Part::SnareDrum) {
+    let (snare_grid, snare_repeats) = match groups.get(&SnareDrum) {
         Some(groups) => {
-            let length_128th = length_map.get(&Part::SnareDrum).unwrap();
+            let length_128th = length_map.get(&SnareDrum).unwrap();
             let number_of_groups = groups.0.len();
             let times = length_limit / length_128th;
             (
-                flatten_groups(Part::SnareDrum, groups),
+                flatten_groups(SnareDrum, groups),
                 number_of_groups * times as usize,
             )
         }
         None => (EventGrid::empty(), 0),
     };
-    let (hihat_grid, hihat_repeats) = match groups.get(&Part::HiHat) {
+    let (hihat_grid, hihat_repeats) = match groups.get(&HiHat) {
         Some(groups) => {
-            let length_128th = length_map.get(&Part::HiHat).unwrap();
+            let length_128th = length_map.get(&HiHat).unwrap();
             let number_of_groups = groups.0.len();
             let times = length_limit / length_128th;
             (
-                flatten_groups(Part::HiHat, groups),
+                flatten_groups(HiHat, groups),
                 number_of_groups * times as usize,
             )
         }
         None => (EventGrid::empty(), 0),
     };
-    let (crash_grid, crash_repeats) = match groups.get(&Part::CrashCymbal) {
+    let (crash_grid, crash_repeats) = match groups.get(&CrashCymbal) {
         Some(groups) => {
-            let length_128th = length_map.get(&Part::CrashCymbal).unwrap();
+            let length_128th = length_map.get(&CrashCymbal).unwrap();
             let number_of_groups = groups.0.len();
             let times = length_limit / length_128th;
             (
-                flatten_groups(Part::CrashCymbal, groups),
+                flatten_groups(CrashCymbal, groups),
                 number_of_groups * times as usize,
             )
         }
@@ -786,6 +801,34 @@ fn flatten_and_merge(
         cycle_grid(crash_grid, Times(crash_repeats as u16)),
         time_signature,
     )
+}
+
+#[test]
+fn test_flatten_and_merge() {
+    let kick_events = vec![ Event { tick: Tick(0), event_type: NoteOn(KickDrum), }, Event { tick: Tick(12), event_type: NoteOff(KickDrum), }, Event { tick: Tick(12), event_type: NoteOn(KickDrum), }, Event { tick: Tick(24), event_type: NoteOff(KickDrum), }, Event { tick: Tick(36), event_type: NoteOn(KickDrum), }, Event { tick: Tick(48), event_type: NoteOff(KickDrum), }, Event { tick: Tick(60), event_type: NoteOn(KickDrum), }, Event { tick: Tick(72), event_type: NoteOff(KickDrum), }, Event { tick: Tick(72), event_type: NoteOn(KickDrum), }, Event { tick: Tick(84), event_type: NoteOff(KickDrum), }, ];
+    let snare_events = [Event { tick: Tick(24), event_type: NoteOn(SnareDrum) }, Event { tick: Tick(48), event_type: NoteOff(SnareDrum) }, Event { tick: Tick(96), event_type: NoteOn(SnareDrum) }, Event { tick: Tick(120), event_type: NoteOff(SnareDrum) }];
+    let four_fourth = TimeSignature::from_str("4/4").unwrap();
+    // let kick_event_grid = EventGrid { events, length: Tick(48 * 4) };
+    let flattened_kick = flatten_and_merge(
+        HashMap::from_iter([(KickDrum, groups("16xx-x-xx-").unwrap().1)]),
+        four_fourth
+    ).collect::<Vec<Event<Tick>>>();
+    let flattened_snare = flatten_and_merge(
+        HashMap::from_iter([(SnareDrum, groups("8-x--x-").unwrap().1)]),
+        four_fourth
+    ).collect::<Vec<Event<Tick>>>();
+    let flattened_kick_and_snare = flatten_and_merge(
+        HashMap::from_iter([
+            (KickDrum, groups("16xx-x-xx-").unwrap().1),
+            (SnareDrum, groups("8-x--x-").unwrap().1)
+        ]),
+        four_fourth
+    ).collect::<Vec<Event<Tick>>>();
+
+    assert_eq!(flattened_kick, kick_events);
+    assert_eq!(flattened_snare, snare_events);
+
+    assert_eq!(flattened_kick.iter().all(|x| flattened_kick_and_snare.contains(x)), true);
 }
 
 // The length of a beat is not standard, so in order to fully describe the length of a MIDI tick the MetaMessage::Tempo event should be present.
@@ -812,7 +855,8 @@ fn create_tracks<'a>(
 ) -> Vec<Vec<midly::TrackEvent<'a>>> {
     //FIXME: unhardcode time signature
     let events_iter = flatten_and_merge(parts_and_groups, time_signature);
-    let events : Vec<Event<Tick>> = events_iter.collect();
+    let events: Vec<Event<Tick>> = events_iter.collect();
+    println!("events: {:?}", events);
     // Notice this time can be incorrect, but it shouldn't matter.
     let time = match events.last() {
         Some(ev) => ev.tick,
@@ -831,11 +875,11 @@ fn create_tracks<'a>(
     // drums.push(TrackEvent { delta: u28::from(0), kind: TrackEventKind::Meta(MetaMessage::TimeSignature(4, 4, MIDI_CLOCKS_PER_CLICK.clone(), 8))});
     for event in event_grid.events {
         let midi_message = match event.event_type {
-            EventType::NoteOn(part) => MidiMessage::NoteOn {
+            NoteOn(part) => MidiMessage::NoteOn {
                 key: part.to_midi_key(),
                 vel: u7::from(120),
             },
-            EventType::NoteOff(part) => MidiMessage::NoteOff {
+            NoteOff(part) => MidiMessage::NoteOff {
                 key: part.to_midi_key(),
                 vel: u7::from(0),
             },

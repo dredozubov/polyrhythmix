@@ -1,5 +1,7 @@
 extern crate derive_more;
 use crate::dsl::dsl::{BasicLength, Group, GroupOrNote, KnownLength, Note, Times, EIGHTH, FOURTH};
+use BasicLength::*;
+use Note::*;
 use std::cmp::Ordering;
 
 use std;
@@ -18,7 +20,6 @@ impl TimeSignature {
             denominator,
         }
     }
-
 }
 
 impl FromStr for TimeSignature {
@@ -43,6 +44,11 @@ impl FromStr for TimeSignature {
             }
         }
     }
+}
+
+#[test]
+fn test_time_signature_from_str() {
+    assert_eq!(TimeSignature::from_str("4/4").unwrap(), TimeSignature { numerator: 4, denominator: Fourth });
 }
 
 impl std::ops::Mul<u8> for TimeSignature {
@@ -77,13 +83,20 @@ fn test_cmp_time_signature() {
 
 impl KnownLength for TimeSignature {
     fn to_128th(&self) -> u32 {
+        println!("{}", self.denominator.to_128th());
         self.denominator.to_128th() * self.numerator as u32
     }
+}
+
+#[test]
+fn test_time_signature_known_length() {
+    assert_eq!(TimeSignature{numerator: 4, denominator: Fourth}.to_128th(), 128);
 }
 
 impl TimeSignature {
     pub fn converges<T: KnownLength, I: IntoIterator<Item = T>>(&self, multiple: I) -> Result<u32, String> {
         let bar_len = self.to_128th();
+        println!("bar_len: {}", bar_len);
         let result = multiple
             .into_iter()
             .fold(bar_len, |acc, t| lowest_common_divisor(t.to_128th(), acc));
