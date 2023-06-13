@@ -1,11 +1,12 @@
 extern crate derive_more;
+
+use std::{cmp::Ordering, str::FromStr};
+
 use crate::dsl::dsl::{BasicLength, Group, GroupOrNote, KnownLength, Note, Times, EIGHTH, FOURTH};
 use BasicLength::*;
 use Note::*;
-use std::cmp::Ordering;
+use GroupOrNote::*;
 
-use std;
-use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TimeSignature {
@@ -155,7 +156,7 @@ fn test_converges() {
         denominator: BasicLength::Fourth,
     };
     let thirteen_eights = Group {
-        notes: vec![GroupOrNote::SingleNote(Note::Hit)],
+        notes: vec![SingleNote(Hit)],
         length: FOURTH.clone(),
         times: Times(12),
     };

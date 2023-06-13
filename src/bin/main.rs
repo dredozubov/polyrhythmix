@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::process::exit;
 use std::str::FromStr;
 
-use poly::dsl::dsl;
+use poly::dsl::dsl::{self, KnownLength};
 use poly::midi::core::{create_smf, Part};
 use poly::midi::time::TimeSignature;
 
@@ -48,12 +48,14 @@ fn part_to_string(part: Part) -> String {
 fn validate_and_parse_part(
     cli: Option<String>,
     part: Part,
-    patterns: &mut HashMap<Part, dsl::Groups>,
+    patterns: &mut BTreeMap<Part, dsl::Groups>,
 ) -> () {
     match cli {
         None => {}
         Some(pattern) => match dsl::groups(pattern.as_str()) {
             Ok((_, group)) => {
+                println!("{:?}: {:?}", part, group);
+                println!("group to 128th: {}", group.to_128th());
                 patterns.insert(part, group);
             }
             Err(_) => {
@@ -102,7 +104,7 @@ fn main() {
                 };
                 let text_description = create_text_description(&kick, &snare, &hihat, &crash);
 
-                let mut groups = HashMap::new();
+                let mut groups = BTreeMap::new();
                 validate_and_parse_part(kick, Part::KickDrum, &mut groups);
                 validate_and_parse_part(snare, Part::SnareDrum, &mut groups);
                 validate_and_parse_part(hihat, Part::HiHat, &mut groups);

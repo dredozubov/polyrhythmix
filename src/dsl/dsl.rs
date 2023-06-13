@@ -286,6 +286,7 @@ impl std::ops::Deref for Group {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Groups(pub Vec<Group>);
 
 impl KnownLength for Groups {
