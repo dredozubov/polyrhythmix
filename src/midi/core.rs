@@ -707,7 +707,7 @@ fn test_event_iterator_impl() {
 /// Calling .collect() on this EventIterator should produce an `EventGrid`.
 /// 
 /// Returns time as a number of ticks from beginning, has to be turned into the midi delta-time.
-fn flatten_and_merge(
+fn flatten_to_iterator(
     groups: BTreeMap<Part, Groups>,
     time_signature: TimeSignature,
 ) -> EventIterator {
@@ -728,56 +728,21 @@ fn flatten_and_merge(
     }
     
     let length_limit = converges_over_bars * time_signature.to_128th();
-    let (kick_grid, kick_repeats) = match groups.get(&KickDrum) {
-        Some(groups) => {
-            let length_128th = length_map.get(&KickDrum).unwrap();
-            let number_of_groups = groups.0.len();
-            let times = length_limit / length_128th;
-            (
-                flatten_groups(KickDrum, groups),
-                number_of_groups * times as usize,
-            )
+    let flatten = |part| {
+        match groups.get(part) {
+            Some(groups) => {
+                let length_128th = length_map.get(part).unwrap();
+                let times = length_limit / length_128th;
+                (flatten_groups(*part, groups), times)
+            }
+            None => (EventGrid::empty(), 0),
         }
-        None => (EventGrid::empty(), 0),
     };
-    let (snare_grid, snare_repeats) = match groups.get(&SnareDrum) {
-        Some(groups) => {
-            let length_128th = length_map.get(&SnareDrum).unwrap();
-            let number_of_groups = groups.0.len();
-            let times = length_limit / length_128th;
-            (
-                flatten_groups(SnareDrum, groups),
-                number_of_groups * times as usize,
-            )
-        }
-        None => (EventGrid::empty(), 0),
-    };
-    let (hihat_grid, hihat_repeats) = match groups.get(&HiHat) {
-        Some(groups) => {
-            let length_128th = length_map.get(&HiHat).unwrap();
-            let number_of_groups = groups.0.len();
-            let times = length_limit / length_128th;
-            (
-                flatten_groups(HiHat, groups),
-                number_of_groups * times as usize,
-            )
-        }
-        None => (EventGrid::empty(), 0),
-    };
-    let (crash_grid, crash_repeats) = match groups.get(&CrashCymbal) {
-        Some(groups) => {
-            let length_128th = length_map.get(&CrashCymbal).unwrap();
-            println!("Crash length: {}", length_128th);
-            let number_of_groups = groups.0.len();
-            let times = length_limit / length_128th;
-            (
-                flatten_groups(CrashCymbal, groups),
-                number_of_groups * times as usize, // suspect, gives 2 instead of one for 4/4 crash
-            )
-        }
-        None => (EventGrid::empty(), 0),
-    };
-    println!("Crash grid: {:?}\n crash_repeats: {}", crash_grid, crash_repeats);
+
+    let (kick_grid, kick_repeats) = flatten(&KickDrum);
+    let (snare_grid, snare_repeats) = flatten(&SnareDrum);
+    let (hihat_grid, hihat_repeats) = flatten(&HiHat);
+    let (crash_grid, crash_repeats) = flatten(&CrashCymbal);
 
     EventIterator::new(
         cycle_grid(kick_grid, Times(kick_repeats as u16)),
@@ -860,7 +825,7 @@ fn create_tracks<'a>(
     text_event: &'a str,
     midi_tempo: MidiTempo
 ) -> Vec<Vec<midly::TrackEvent<'a>>> {
-    let events_iter = flatten_and_merge(parts_and_groups, time_signature);
+    let events_iter = flatten_to_iterator(parts_and_groups, time_signature);
     let events: Vec<Event<Tick>> = events_iter.collect();
     // Notice this time can be incorrect, but it shouldn't matter.
     let time = match events.last() {
