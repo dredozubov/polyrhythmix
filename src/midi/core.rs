@@ -439,12 +439,12 @@ fn group_to_event_grid(
             //     grid.length = grid.length + eg.length;
             //     time = time + grid.length;
             // }
-            Rest => {
+            Note::Rest => {
                 let rest_end = time + note_length;
                 time = rest_end;
                 grid.length = rest_end;
             }
-            Hit => {
+            Note::Hit => {
                 let note_end = time + note_length;
                 let note_on = Event {
                     tick: time,
