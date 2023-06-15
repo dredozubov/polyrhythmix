@@ -14,7 +14,7 @@ use midly::{MetaMessage, TrackEvent};
 
 use crate::dsl::dsl::{
     group_or_delimited_group, groups, BasicLength, Group, GroupOrNote, Groups, KnownLength, Length,
-    ModdedLength, Note, Times,
+    ModdedLength, Note, Times, flatten_group,
 };
 use crate::midi::time::TimeSignature;
 use GroupOrNote::*;
@@ -201,7 +201,21 @@ impl<T> EventGrid<T> {
     }
 }
 
-// FIXME: add a mutable version for use in `flatten_groups`
+impl<T> EventGrid<T>
+where
+    T: Clone
+{
+    pub fn extend(&self, other: &EventGrid<T>) -> EventGrid<T> {
+        let combined = self.events.iter().cloned().chain(other.events.iter().cloned()).collect();
+        EventGrid { events: combined, length: self.length + other.length }
+    }
+
+}
+
+// FIXME: add a mutable version for use in `groups_to_event_grid`
+/// Adds two EventGrids together, manipulates the time of the right `EventGrid` by
+/// adding the length of the left one to timings.
+/// If you need to concat two `EventGrid`s without messing up with times, then use `extend`.
 impl<T: Add<Tick, Output = T> + Clone + Ord + std::fmt::Debug> Add for EventGrid<T> {
     type Output = EventGrid<T>;
 
@@ -404,12 +418,12 @@ impl MidiTempo {
 
 /// Returns an EventGrid and a total length. Length is needed as a group can end with rests that are not in the grid,
 /// so we need it to cycle the group.
-fn flatten_group(
+fn group_to_event_grid(
     Group {
         notes,
         length,
         times,
-    }: &Group,
+    }: &Group<Note>,
     part: Part,
     start: &Tick,
 ) -> EventGrid<Tick> {
@@ -418,18 +432,19 @@ fn flatten_group(
     let mut grid = EventGrid::empty();
     notes.iter().for_each(|entry| {
         match entry {
-            SingleGroup(group) => {
-                let mut eg = flatten_group(&group, part, &time.clone());
-                grid.events.append(&mut eg.events);
-                grid.length = grid.length + eg.length;
-                time = time + grid.length;
-            }
-            SingleNote(Note::Rest) => {
+            // SingleGroup(group) => {
+            //     let mut eg = group_to_event_grid(&group, part, &time.clone());
+            //     println!("SINGLE GROUP EVENTGRID: {:?}", eg);
+            //     grid.events.append(&mut eg.events);
+            //     grid.length = grid.length + eg.length;
+            //     time = time + grid.length;
+            // }
+            Rest => {
                 let rest_end = time + note_length;
                 time = rest_end;
                 grid.length = rest_end;
             }
-            SingleNote(Note::Hit) => {
+            Hit => {
                 let note_end = time + note_length;
                 let note_on = Event {
                     tick: time,
@@ -451,11 +466,11 @@ fn flatten_group(
 }
 
 #[test]
-fn test_flatten_group() {
+fn test_group_to_event_grid() {
     let start_time = Tick(0);
     assert_eq!(
-        flatten_group(
-            &group_or_delimited_group("(2,8x--)").unwrap().1,
+        group_to_event_grid(
+            flatten_group(group_or_delimited_group("(2,8x--)").unwrap().1).0.first().unwrap(),
             KickDrum,
             &start_time
         ),
@@ -500,13 +515,17 @@ fn test_cycle_grid() {
 
 /// Takes multiple `Group`s and turn them into a single `EventGrid`.
 /// The point of it is to combine timings into a single MIDI track.
-fn flatten_groups(part: Part, groups: &Groups) -> EventGrid<Tick> {
+fn groups_to_event_grid(part: Part, groups: &Groups) -> EventGrid<Tick> {
     let mut time: Tick = Tick(0);
     let mut grid: EventGrid<Tick> = EventGrid::empty();
     groups.0.iter().for_each(|group| {
-        // `flatten_group` doesn't know at which point in time groups starts unless we pass
+        // `group_to_event_grid` doesn't know at which point in time groups starts unless we pass
         // `time` explicitly. Only the first `Group` in `Groups` starts at zero.
-        grid = grid.clone() + flatten_group(group, part, &time);
+        let flattened_group = group_to_event_grid(group, part, &time);
+        println!("(groups_to_event_grid) FLATTENED GROUP: {:?}", flattened_group);
+
+        // Note that using `+` is wrong here as it's messing with timings and it really shouldn't
+        grid = grid.extend(&flattened_group);
         time = grid.length;
     });
     grid
@@ -574,13 +593,13 @@ impl Iterator for EventIterator {
 #[test]
 fn test_event_iterator_impl() {
     let empty = EventGrid::empty();
-    let kick1 = flatten_group(
-        &group_or_delimited_group("(4x-)").unwrap().1,
+    let kick1 = group_to_event_grid(
+        &flatten_group(group_or_delimited_group("(4x-)").unwrap().1).0.first().unwrap(),
         KickDrum,
         &mut Tick(0),
     );
-    let snare1 = flatten_group(
-        &group_or_delimited_group("4-x").unwrap().1,
+    let snare1 = group_to_event_grid(
+        &flatten_group(group_or_delimited_group("(4-x)").unwrap().1).0.first().unwrap(),
         SnareDrum,
         &mut Tick(0),
     );
@@ -642,7 +661,7 @@ fn test_event_iterator_impl() {
 /// Calling .collect() on this EventIterator should produce an `EventGrid`.
 /// 
 /// Returns time as a number of ticks from beginning, has to be turned into the midi delta-time.
-fn flatten_to_iterator(
+fn merge_to_iterator(
     groups: BTreeMap<Part, Groups>,
     time_signature: TimeSignature,
 ) -> EventIterator {
@@ -677,7 +696,7 @@ fn flatten_to_iterator(
                 let length_128th = length_map.get(part).unwrap();
                 let times = length_limit / length_128th;
                 println!("TIMES: {}", times);
-                let flattened = flatten_groups(*part, groups);
+                let flattened = groups_to_event_grid(*part, groups);
                 println!("FLATTENED: {:?}", flattened);
                 (flattened, times)
             }
@@ -702,14 +721,14 @@ fn flatten_to_iterator(
 }
 
 #[test]
-fn test_flatten_to_iterator() {
+fn test_merge_to_iterator() {
     let snare_group = "8-x--x-";
     let kick_group = "16xx-x-xx-";
 
     let kick_events = vec![Event { tick: Tick(0), event_type: NoteOn(KickDrum) }, Event { tick: Tick(12), event_type: NoteOff(KickDrum) }, Event { tick: Tick(12), event_type: NoteOn(KickDrum) }, Event { tick: Tick(24), event_type: NoteOff(KickDrum) }, Event { tick: Tick(36), event_type: NoteOn(KickDrum) }, Event { tick: Tick(48), event_type: NoteOff(KickDrum) }, Event { tick: Tick(60), event_type: NoteOn(KickDrum) }, Event { tick: Tick(72), event_type: NoteOff(KickDrum) }, Event { tick: Tick(72), event_type: NoteOn(KickDrum) }, Event { tick: Tick(84), event_type: NoteOff(KickDrum) }, Event { tick: Tick(96), event_type: NoteOn(KickDrum) }, Event { tick: Tick(108), event_type: NoteOff(KickDrum) }, Event { tick: Tick(108), event_type: NoteOn(KickDrum) }, Event { tick: Tick(120), event_type: NoteOff(KickDrum) }, Event { tick: Tick(132), event_type: NoteOn(KickDrum) }, Event { tick: Tick(144), event_type: NoteOff(KickDrum) }, Event { tick: Tick(156), event_type: NoteOn(KickDrum) }, Event { tick: Tick(168), event_type: NoteOff(KickDrum) }, Event { tick: Tick(168), event_type: NoteOn(KickDrum) }, Event { tick: Tick(180), event_type: NoteOff(KickDrum) }];
     let snare_events = vec![Event { tick: Tick(24), event_type: NoteOn(SnareDrum) }, Event { tick: Tick(48), event_type: NoteOff(SnareDrum) }, Event { tick: Tick(96), event_type: NoteOn(SnareDrum) }, Event { tick: Tick(120), event_type: NoteOff(SnareDrum) }, Event { tick: Tick(24+144), event_type: NoteOn(SnareDrum) }, Event { tick: Tick(48+144), event_type: NoteOff(SnareDrum) }, Event { tick: Tick(96+144), event_type: NoteOn(SnareDrum) }, Event { tick: Tick(120+144), event_type: NoteOff(SnareDrum) }, Event { tick: Tick(24+288), event_type: NoteOn(SnareDrum) }, Event { tick: Tick(48+288), event_type: NoteOff(SnareDrum) }, Event { tick: Tick(96+288), event_type: NoteOn(SnareDrum) }, Event { tick: Tick(120+288), event_type: NoteOff(SnareDrum) }, Event { tick: Tick(24+144*3), event_type: NoteOn(SnareDrum) }, Event { tick: Tick(48+144*3), event_type: NoteOff(SnareDrum) }, Event { tick: Tick(96+144*3), event_type: NoteOn(SnareDrum) }, Event { tick: Tick(120+144*3), event_type: NoteOff(SnareDrum) }];
     let four_fourth = TimeSignature::from_str("4/4").unwrap();
-    let flattened_kick_and_snare = flatten_to_iterator(
+    let flattened_kick_and_snare = merge_to_iterator(
         BTreeMap::from_iter([
             (KickDrum, groups("16xx-x-xx-").unwrap().1),
             (SnareDrum, groups("8-x--x-").unwrap().1),
@@ -718,8 +737,8 @@ fn test_flatten_to_iterator() {
     )
     .collect::<Vec<Event<Tick>>>();
 
-    assert_eq!(flatten_to_iterator(BTreeMap::from_iter([(KickDrum, groups(kick_group).unwrap().1)]), four_fourth).collect::<Vec<Event<Tick>>>(), kick_events);
-    assert_eq!(flatten_to_iterator(BTreeMap::from_iter([(SnareDrum, groups(snare_group).unwrap().1)]), four_fourth).collect::<Vec<Event<Tick>>>(), snare_events);
+    assert_eq!(merge_to_iterator(BTreeMap::from_iter([(KickDrum, groups(kick_group).unwrap().1)]), four_fourth).collect::<Vec<Event<Tick>>>(), kick_events);
+    assert_eq!(merge_to_iterator(BTreeMap::from_iter([(SnareDrum, groups(snare_group).unwrap().1)]), four_fourth).collect::<Vec<Event<Tick>>>(), snare_events);
     assert_eq!(
         kick_events
             .iter()
@@ -765,7 +784,7 @@ fn create_tracks<'a>(
     text_event: &'a str,
     midi_tempo: MidiTempo
 ) -> Vec<Vec<midly::TrackEvent<'a>>> {
-    let events_iter = flatten_to_iterator(parts_and_groups, time_signature);
+    let events_iter = merge_to_iterator(parts_and_groups, time_signature);
     let events: Vec<Event<Tick>> = events_iter.collect();
     // Notice this time can be incorrect, but it shouldn't matter.
     let time = match events.last() {

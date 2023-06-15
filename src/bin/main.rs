@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::process::exit;
 use std::str::FromStr;
 
-use poly::dsl::dsl::{self, KnownLength};
+use poly::dsl::dsl::{self, KnownLength, flatten_groups};
 use poly::midi::core::{create_smf, Part};
 use poly::midi::time::TimeSignature;
 
@@ -53,10 +53,10 @@ fn validate_and_parse_part(
     match cli {
         None => {}
         Some(pattern) => match dsl::groups(pattern.as_str()) {
-            Ok((_, group)) => {
-                println!("{:?}: {:?}", part, group);
-                println!("group to 128th: {}", group.to_128th());
-                patterns.insert(part, group);
+            Ok((_, groups)) => {
+                println!("{:?}: {:?}", part, groups);
+                // println!("group to 128th: {}", group.to_128th());
+                patterns.insert(part, groups);
             }
             Err(_) => {
                 panic!("{} pattern is malformed.", part_to_string(part))
