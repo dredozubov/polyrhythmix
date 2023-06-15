@@ -8,8 +8,9 @@ use nom::multi::many1;
 use nom::sequence::{separated_pair, tuple, delimited};
 use nom::{Err, IResult};
 use nom::branch::alt;
+use nom::Err::Error;
 
-use nom::combinator::{map, map_res};
+use nom::combinator::{map, map_res, all_consuming};
 
 
 /// Allows measurement in 128th notes.
@@ -169,63 +170,64 @@ pub enum Note {
     Rest
 }
 
+use Note::*;
 
 #[allow(dead_code)]
-pub static WHOLE : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Whole));
+pub(crate) static WHOLE : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Whole));
 #[allow(dead_code)]
-pub static HALF : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Half));
+pub(crate) static HALF : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Half));
 #[allow(dead_code)]
-pub static FOURTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Fourth));
+pub(crate) static FOURTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Fourth));
 #[allow(dead_code)]
-pub static EIGHTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Eighth));
+pub(crate) static EIGHTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Eighth));
 #[allow(dead_code)]
-pub static SIXTEENTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Sixteenth));
+pub(crate) static SIXTEENTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::Sixteenth));
 #[allow(dead_code)]
-pub static THIRTY_SECOND : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::ThirtySecond));
+pub(crate) static THIRTY_SECOND : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::ThirtySecond));
 #[allow(dead_code)]
-pub static SIXTY_FOURTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::SixtyFourth));
+pub(crate) static SIXTY_FOURTH : &Length = &Length::Simple(ModdedLength::Plain(BasicLength::SixtyFourth));
 
 #[allow(dead_code)]
-pub static WHOLE_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Whole));
+pub(crate) static WHOLE_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Whole));
 #[allow(dead_code)]
-pub static HALF_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Half));
+pub(crate) static HALF_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Half));
 #[allow(dead_code)]
-pub static FOURTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Fourth));
+pub(crate) static FOURTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Fourth));
 #[allow(dead_code)]
-pub static EIGHTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Eighth));
+pub(crate) static EIGHTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Eighth));
 #[allow(dead_code)]
-pub static SIXTEENTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Sixteenth));
+pub(crate) static SIXTEENTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::Sixteenth));
 #[allow(dead_code)]
-pub static THIRTY_SECOND_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::ThirtySecond));
+pub(crate) static THIRTY_SECOND_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::ThirtySecond));
 #[allow(dead_code)]
-pub static SIXTY_FOURTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::SixtyFourth));
+pub(crate) static SIXTY_FOURTH_DOTTED_TRIPLET : &Length = &Length::Triplet(ModdedLength::Dotted(BasicLength::SixtyFourth));
 
 #[allow(dead_code)]
-pub static WHOLE_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Whole));
+pub(crate) static WHOLE_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Whole));
 #[allow(dead_code)]
-pub static HALF_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Half));
+pub(crate) static HALF_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Half));
 #[allow(dead_code)]
-pub static FOURTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Fourth));
+pub(crate) static FOURTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Fourth));
 #[allow(dead_code)]
-pub static EIGHTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Eighth));
+pub(crate) static EIGHTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Eighth));
 #[allow(dead_code)]
-pub static SIXTEENTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Sixteenth));
+pub(crate) static SIXTEENTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::Sixteenth));
 #[allow(dead_code)]
-pub static THIRTY_SECOND_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::ThirtySecond));
+pub(crate) static THIRTY_SECOND_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::ThirtySecond));
 #[allow(dead_code)]
-pub static SIXTY_FOURTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::SixtyFourth));
+pub(crate) static SIXTY_FOURTH_TRIPLET : &Length = &Length::Triplet(ModdedLength::Plain(BasicLength::SixtyFourth));
 
 #[allow(dead_code)]
-pub static HIT : GroupOrNote = GroupOrNote::SingleNote(Note::Hit);
+pub(crate) static HIT : GroupOrNote = GroupOrNote::SingleNote(Note::Hit);
 #[allow(dead_code)]
-pub static REST : GroupOrNote = GroupOrNote::SingleNote(Note::Rest);
+pub(crate) static REST : GroupOrNote = GroupOrNote::SingleNote(Note::Rest);
 
 #[allow(dead_code)]
-pub static ONCE : &Times = &Times(1);
+pub(crate) static ONCE : &Times = &Times(1);
 #[allow(dead_code)]
-pub static TWICE: &Times = &Times(2);
+pub(crate) static TWICE: &Times = &Times(2);
 #[allow(dead_code)]
-pub static THRICE : &Times = &Times(3);
+pub(crate) static THRICE : &Times = &Times(3);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
@@ -236,6 +238,8 @@ pub enum GroupOrNote {
     SingleGroup(Group),
     SingleNote(Note)
 }
+
+use GroupOrNote::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Group {
@@ -268,6 +272,7 @@ impl KnownLength for Group {
     fn to_128th(&self) -> u32 {
         let mut acc = 0;
         let note_length = self.length.to_128th();
+        println!("NOTE LENGTH: {}", note_length);
         for group in self.notes.iter() {
             match group {
                 GroupOrNote::SingleGroup(subgroup) => { acc += subgroup.to_128th(); },
@@ -278,6 +283,12 @@ impl KnownLength for Group {
     }
 }
 
+#[test]
+fn test_known_length_group() {
+    let group = Group { notes: vec![SingleNote(Hit), SingleNote(Hit), SingleNote(Rest), SingleNote(Hit), SingleNote(Rest), SingleNote(Hit), SingleNote(Hit), SingleNote(Rest)], length: SIXTEENTH.clone(), times: Times(1) };
+    assert_eq!(group.to_128th(), 64);
+}
+
 impl std::ops::Deref for Group {
     type Target = Vec<GroupOrNote>;
 
@@ -286,7 +297,7 @@ impl std::ops::Deref for Group {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Groups(pub Vec<Group>);
 
 impl KnownLength for Groups {
@@ -299,6 +310,12 @@ impl KnownLength for &Groups {
     fn to_128th(&self) -> u32 {
         self.0.iter().fold(0, |acc, x| { acc + x.to_128th() })
     }
+}
+
+#[test]
+fn test_known_length_groups() {
+    let groups = Groups(vec![Group { notes: vec![SingleNote(Hit), SingleNote(Hit), SingleNote(Rest), SingleNote(Hit), SingleNote(Rest), SingleNote(Hit), SingleNote(Hit), SingleNote(Rest)], length: SIXTEENTH.clone(), times: Times(1) }]);
+    assert_eq!(groups.to_128th(), 96);
 }
 
 fn hit(input: &str) -> IResult<&str, Note> {
@@ -369,7 +386,7 @@ pub fn group_or_delimited_group(input: &str) -> IResult<&str, Group> {
 }
 
 pub fn groups(input: &str) -> IResult<&str, Groups> {
-    many1(group_or_delimited_group)(input).map(|x| { (x.0, Groups(x.1)) } )
+    all_consuming(many1(group_or_delimited_group))(input).map(|x| { (x.0, Groups(x.1)) } )
 }
 
 #[test]
@@ -378,6 +395,12 @@ fn parse_length() {
   assert_eq!(length("8+16"), Ok(("", Length::Tied(ModdedLength::Plain(BasicLength::Eighth), ModdedLength::Plain(BasicLength::Sixteenth)))));
   assert_eq!(length("8t"), Ok(("", *EIGHTH_TRIPLET)));
   assert_eq!(length("4.t"), Ok(("", *FOURTH_DOTTED_TRIPLET)));
+}
+
+#[test]
+fn parse_groups() {
+    assert_eq!(groups("8x-(7,8xx)"), Ok(("", Groups(vec![Group { notes: vec![SingleNote(Hit), SingleNote(Rest)], length: *EIGHTH, times: Times(1) }, Group { notes: vec![SingleNote(Hit), SingleNote(Hit)], length: *EIGHTH, times: Times(7) }]))));   
+    assert_eq!(groups("8x-(7,8xx"), Err(Err::Error(nom::error::make_error("(7,8xx", nom::error::ErrorKind::Eof))));    
 }
 
 #[test]
@@ -397,6 +420,7 @@ fn parse_delimited_group() {
 fn parse_group_or_delimited_group() {
     assert_eq!(group_or_delimited_group("(3,16x--x-)"), Ok(("", Group { times: *THRICE, notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: *SIXTEENTH})));
     assert_eq!(group_or_delimited_group("16x--x-"), Ok(("", Group { times: *ONCE, notes: vec![HIT.clone(), REST.clone(), REST.clone(), HIT.clone(), REST.clone()], length: *SIXTEENTH})));
+    assert_eq!(group_or_delimited_group("(7,8xx"), Err(Err::Error(nom::error::make_error("(7,8xx", nom::error::ErrorKind::Digit))));
 }
 
 // “x” hit
