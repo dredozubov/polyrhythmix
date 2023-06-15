@@ -419,7 +419,7 @@ fn test_known_length_groups() {
         length: SIXTEENTH.clone(),
         times: Times(1),
     }]);
-    assert_eq!(groups.to_128th(), 96);
+    assert_eq!(groups.to_128th(), 64);
 }
 
 fn hit(input: &str) -> IResult<&str, Note> {
@@ -488,7 +488,7 @@ fn times(input: &str) -> IResult<&str, Times> {
 
 fn group(input: &str) -> IResult<&str, Group<GroupOrNote>> {
     let repeated = map(
-        tuple((times, char(','), length, many1(note)),
+        tuple((times, char(','), length, many1(note))),
         |(t, _, l, n)| (t, l, n),
     );
     let single = map(tuple((length, many1(note))), |(l, vn)| (Times(1), l, vn));
@@ -523,21 +523,32 @@ pub fn flatten_group(input: Group<GroupOrNote>) -> Groups {
     let mut out_groups = Vec::new();
     input.notes.iter().for_each(|g| match g {
         SingleGroup(group) => {
-            let isolated_group = Group { notes: note_group.clone(), length: input.length, times: Times(1) };
+            let isolated_group = Group {
+                notes: note_group.clone(),
+                length: input.length,
+                times: Times(1),
+            };
             out_groups.push(isolated_group);
             note_group.clear();
             out_groups.extend(flatten_group(group.clone()).0);
-        },
+        }
         SingleNote(note) => {
             note_group.push(*note);
         }
     });
-    Groups(out_groups.iter().cloned().cycle().take(out_groups.len() * (input.times.0 as usize)).collect())
+    Groups(
+        out_groups
+            .iter()
+            .cloned()
+            .cycle()
+            .take(out_groups.len() * (input.times.0 as usize))
+            .collect(),
+    )
 }
 
 pub fn flatten_groups<I>(input_groups: I) -> Groups
 where
-    I: IntoIterator<Item = Group<GroupOrNote>>
+    I: IntoIterator<Item = Group<GroupOrNote>>,
 {
     let mut out = Vec::new();
     input_groups.into_iter().for_each(|g| {
@@ -564,13 +575,13 @@ fn test_flatten_group() {
         Group {
             notes: vec![Hit],
             length: *SIXTEENTH,
-            times: Times(1)
+            times: Times(1),
         },
         Group {
             notes: vec![Rest, Hit],
             length: *EIGHTH,
-            times: Times(3)
-        }
+            times: Times(3),
+        },
     ]);
     assert_eq!(flatten_group(group("(2,16x(3,8-x))").unwrap().1), out);
 }
@@ -623,6 +634,19 @@ fn parse_groups() {
 
 #[test]
 fn parse_group() {
+    let expectation = Group {
+        times: *TWICE,
+        notes: vec![
+            SingleNote(Hit),
+            SingleGroup(Group {
+                times: *ONCE,
+                notes: vec![],
+                length: *EIGHTH
+            })
+        ],
+        length: *SIXTEENTH
+    };
+    assert_eq!(group("(2,16x(8-x))"), Ok(("", expectation)));
     assert_eq!(
         group("16x--x-"),
         Ok((
