@@ -54,8 +54,6 @@ fn validate_and_parse_part(
         None => {}
         Some(pattern) => match dsl::groups(pattern.as_str()) {
             Ok((_, groups)) => {
-                println!("{:?}: {:?}", part, groups);
-                // println!("group to 128th: {}", group.to_128th());
                 patterns.insert(part, groups);
             }
             Err(_) => {
