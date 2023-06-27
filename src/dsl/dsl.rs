@@ -272,9 +272,9 @@ pub(crate) static SIXTY_FOURTH_TRIPLET: &Length =
     &Length::Triplet(ModdedLength::Plain(BasicLength::SixtyFourth));
 
 #[allow(dead_code)]
-pub(crate) static HIT: GroupOrNote = GroupOrNote::SingleNote(Note::Hit);
+pub(crate) static HIT: GroupOrNote<Times> = GroupOrNote::SingleNote(Note::Hit);
 #[allow(dead_code)]
-pub(crate) static REST: GroupOrNote = GroupOrNote::SingleNote(Note::Rest);
+pub(crate) static REST: GroupOrNote<Times> = GroupOrNote::SingleNote(Note::Rest);
 
 #[allow(dead_code)]
 pub(crate) static ONCE: &Times = &Times(1);
@@ -288,8 +288,8 @@ pub(crate) static THRICE: &Times = &Times(3);
 pub struct Times(pub u16);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GroupOrNote {
-    SingleGroup(Group<GroupOrNote>),
+pub enum GroupOrNote<T> {
+    SingleGroup(Group<GroupOrNote<T>, T>),
     SingleNote(Note),
 }
 
@@ -299,13 +299,13 @@ use GroupOrNote::*;
 /// `Group<GroupOrNote>` acts as a recursive `Group`, dsl parser uses this as return type
 /// `Group<Note>` is a non-recursive group. To go from recursive groups to not-recursive ones, try using `flatten_group`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Group<T> {
+pub struct Group<T, R> {
     pub notes: Vec<T>,
     pub length: Length,
-    pub times: Times,
+    pub times: R,
 }
 
-impl<T> Group<T> {
+impl<T> Group<T, Times> {
     pub fn empty() -> Self {
         Group {
             notes: Vec::new(),
@@ -315,7 +315,7 @@ impl<T> Group<T> {
     }
 }
 
-impl KnownLength for &Group<GroupOrNote> {
+impl KnownLength for &Group<GroupOrNote<Times>, Times> {
     fn to_128th(&self) -> u32 {
         let mut acc = 0;
         let note_length = self.length.to_128th();
@@ -333,7 +333,7 @@ impl KnownLength for &Group<GroupOrNote> {
     }
 }
 
-impl KnownLength for Group<GroupOrNote> {
+impl KnownLength for Group<GroupOrNote<Times>, Times> {
     fn to_128th(&self) -> u32 {
         let mut acc = 0;
         let note_length = self.length.to_128th();
@@ -351,14 +351,14 @@ impl KnownLength for Group<GroupOrNote> {
     }
 }
 
-impl KnownLength for Group<Note> {
+impl KnownLength for Group<Note, ()> {
     fn to_128th(&self) -> u32 {
         let mut acc = 0;
         let note_length = self.length.to_128th();
         for group in self.notes.iter() {
             acc += note_length;
         }
-        acc * self.times.0 as u32
+        acc
     }
 }
 
@@ -382,10 +382,10 @@ fn test_known_length_group() {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Groups(pub Vec<Group<Note>>);
+pub struct Groups(pub Vec<Group<Note, ()>>);
 
 impl IntoIterator for Groups {
-    type Item = Group<Note>;
+    type Item = Group<Note, ()>;
 
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
@@ -394,8 +394,8 @@ impl IntoIterator for Groups {
     }
 }
 
-impl FromIterator<Group<Note>> for Groups {
-    fn from_iter<T: IntoIterator<Item = Group<Note>>>(iter: T) -> Self {
+impl FromIterator<Group<Note, ()>> for Groups {
+    fn from_iter<T: IntoIterator<Item = Group<Note, ()>>>(iter: T) -> Self {
         Self(Vec::from_iter(iter))
     }
 }
@@ -417,7 +417,7 @@ fn test_known_length_groups() {
     let groups = Groups(vec![Group {
         notes: vec![Hit, Hit, Rest, Hit, Rest, Hit, Hit, Rest],
         length: SIXTEENTH.clone(),
-        times: Times(1),
+        times: (),
     }]);
     assert_eq!(groups.to_128th(), 64);
 }
@@ -486,15 +486,15 @@ fn times(input: &str) -> IResult<&str, Times> {
     map(map_res(digit1, str::parse), |x| Times(x))(input)
 }
 
-fn group(input: &str) -> IResult<&str, Group<GroupOrNote>> {
+fn group(input: &str) -> IResult<&str, Group<GroupOrNote<Times>, Times>> {
     let repeated_syntax = map(
         tuple((
             times,
             char(','),
             length,
             many1(alt((
-                map_res(note, |x| -> Result<GroupOrNote, &str> { Ok(SingleNote(x))}),
-                map_res(delimited_group, |x| -> Result<GroupOrNote, &str> { Ok(SingleGroup(x))}),
+                map_res(note, |x| -> Result<GroupOrNote<Times>, &str> { Ok(SingleNote(x))}),
+                map_res(delimited_group, |x| -> Result<GroupOrNote<Times>, &str> { Ok(SingleGroup(x))}),
             ))),
         )),
         |(t, _, l, n)| (t, l, n),
@@ -503,8 +503,8 @@ fn group(input: &str) -> IResult<&str, Group<GroupOrNote>> {
         tuple((
             length,
             many1(alt((
-                map_res(note, |x| -> Result<GroupOrNote, &str> { Ok(SingleNote(x))}),
-                map_res(delimited_group, |x| -> Result<GroupOrNote, &str> { Ok(SingleGroup(x))}),
+                map_res(note, |x| -> Result<GroupOrNote<Times>, &str> { Ok(SingleNote(x))}),
+                map_res(delimited_group, |x| -> Result<GroupOrNote<Times>, &str> { Ok(SingleGroup(x))}),
             ))),
         )), |(l, vn)| (Times(1), l, vn));
     let (rem, (t, l, n)) = alt((repeated_syntax, single_syntax))(input)?;
@@ -520,11 +520,11 @@ fn group(input: &str) -> IResult<&str, Group<GroupOrNote>> {
     ))
 }
 
-fn delimited_group(input: &str) -> IResult<&str, Group<GroupOrNote>> {
+fn delimited_group(input: &str) -> IResult<&str, Group<GroupOrNote<Times>, Times>> {
     delimited(char('('), group, char(')'))(input)
 }
 
-pub fn group_or_delimited_group(input: &str) -> IResult<&str, Group<GroupOrNote>> {
+pub fn group_or_delimited_group(input: &str) -> IResult<&str, Group<GroupOrNote<Times>, Times>> {
     alt((delimited_group, group))(input)
 }
 
@@ -538,30 +538,31 @@ pub fn groups(input: &str) -> IResult<&str, Groups> {
 
 pub fn flatten_groups<I>(input_groups: I) -> Groups
 where
-    I: IntoIterator<Item = Group<GroupOrNote>>,
+    I: IntoIterator<Item = Group<GroupOrNote<Times>, Times>>,
 {
     let mut out = Vec::new();
     input_groups.into_iter().for_each(|g| {
         let flattened = flatten_group(g).0;
         out.extend(flattened);
     });
-
     Groups(out)
 }
 
-pub fn flatten_group(input: Group<GroupOrNote>) -> Groups {
+pub fn flatten_group(input: Group<GroupOrNote<Times>, Times>) -> Groups {
     flatten_group_(&input, &mut Vec::new())
 }
 
-fn flatten_group_(input: &Group<GroupOrNote>, out_groups: &mut Vec<Group<Note>>) -> Groups {
+fn flatten_group_(input: &Group<GroupOrNote<Times>, Times>, out_groups: &mut Vec<Group<Note, ()>>) -> Groups {
     let mut note_group = Vec::new();
-    input.notes.iter().for_each(|g| {
+    let inlined_notes = input.notes.iter().cycle().take(input.notes.len() * input.times.0 as usize);
+    let group = Group { notes: inlined_notes.collect(), times: (), length: input.length };
+    group.notes.iter().for_each(|&g| {
         match g {
             SingleGroup(group) => {
                 let isolated_group = Group {
                     notes: note_group.clone(),
                     length: input.length,
-                    times: Times(1),
+                    times: (),
                 };
                 out_groups.push(isolated_group);
                 note_group.clear();
@@ -575,30 +576,23 @@ fn flatten_group_(input: &Group<GroupOrNote>, out_groups: &mut Vec<Group<Note>>)
     if !note_group.is_empty() {
         let isolated_group = Group {
             notes: note_group.clone(),
-            length: input.length,
-            times: input.times,
+            length: group.length,
+            times: (),
         };
         out_groups.push(isolated_group);
     }
-    Groups(
-        out_groups
-            .iter()
-            .cloned()
-            .cycle()
-            .take(out_groups.len() * (input.times.0 as usize))
-            .collect(),
-    )
+    Groups(out_groups.iter().cloned().collect())
 }
 
 #[test]
 fn test_flatten_group() {
     let output = Groups(vec![
-        Group { notes: vec![Hit], length: *SIXTEENTH, times: Times(1) },
-        Group { notes: vec![Rest, Hit], length: *EIGHTH, times: Times(2) },
-        Group { notes: vec![Hit], length: *SIXTEENTH, times: Times(1) },
-        Group { notes: vec![Rest, Hit], length: *EIGHTH, times: Times(2) },
-        Group { notes: vec![Hit], length: *SIXTEENTH, times: Times(1) },
-        Group { notes: vec![Rest, Hit], length: *EIGHTH, times: Times(2) },
+        Group { notes: vec![Hit], length: *SIXTEENTH, times: () },
+        Group { notes: vec![Rest, Hit, Rest, Hit], length: *EIGHTH, times: () },
+        Group { notes: vec![Hit], length: *SIXTEENTH, times: () },
+        Group { notes: vec![Rest, Hit, Rest, Hit], length: *EIGHTH, times: () },
+        Group { notes: vec![Hit], length: *SIXTEENTH, times: () },
+        Group { notes: vec![Rest, Hit, Rest, Hit], length: *EIGHTH, times: () },
     ]);
     // basically it's 3,16x(2,8-x)
     let input = Group {
@@ -641,23 +635,23 @@ fn test_parse_groups() {
                 Group {
                     notes: vec![Hit, Rest],
                     length: *EIGHTH,
-                    times: Times(1)
+                    times: ()
                 },
                 Group {
-                    notes: vec![Hit, Hit],
+                    notes: vec![Hit, Hit, Hit, Hit, Hit, Hit, Hit, Hit, Hit, Hit, Hit, Hit, Hit, Hit],
                     length: *EIGHTH,
-                    times: Times(7)
+                    times: ()
                 }
             ])
         ))
     );
-    // assert_eq!(
-    //     groups("8x-(7,8xx"),
-    //     Err(Err::Error(nom::error::make_error(
-    //         "(7,8xx",
-    //         nom::error::ErrorKind::Eof
-    //     )))
-    // );
+    assert_eq!(
+        groups("8x-(7,8xx"),
+        Err(Err::Error(nom::error::make_error(
+            "(7,8xx",
+            nom::error::ErrorKind::Eof
+        )))
+    );
 }
 
 #[test]
