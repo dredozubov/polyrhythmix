@@ -104,7 +104,6 @@ fn main() {
 
                 let mut groups = BTreeMap::new();
                 validate_and_parse_part(kick, Part::KickDrum, &mut groups);
-                println!("KICK GROUPS: {:?}", groups);
                 validate_and_parse_part(snare, Part::SnareDrum, &mut groups);
                 validate_and_parse_part(hihat, Part::HiHat, &mut groups);
                 validate_and_parse_part(crash, Part::CrashCymbal, &mut groups);

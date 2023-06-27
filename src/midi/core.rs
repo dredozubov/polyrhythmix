@@ -529,9 +529,6 @@ fn groups_to_event_grid(part: Part, groups: &Groups) -> EventGrid<Tick> {
         // `group_to_event_grid` doesn't know at which point in time groups starts unless we pass
         // `time` explicitly. Only the first `Group` in `Groups` starts at zero.
         let new_grid = group_to_event_grid(group, part, &time);
-        println!("(groups_to_event_grid) GRID: {:?}", grid);
-        println!("(groups_to_event_grid) NEW GRID: {:?}", grid);
-        // Note that using `+` is wrong here as it's messing with timings and it really shouldn't
 
         grid.events.extend(new_grid.events);
         grid.end = new_grid.end;
@@ -681,7 +678,6 @@ fn merge_into_iterator(
     groups: BTreeMap<Part, Groups>,
     time_signature: TimeSignature,
 ) -> EventIterator {
-    // println!("INPUT MAP: {:?}", groups);
     // Maps a drum part to a number of 128th notes
     let length_map: BTreeMap<Part, u32> = groups.iter().map(|(k, x)| (*k, x.to_128th())).collect();
 
@@ -698,15 +694,12 @@ fn merge_into_iterator(
 
     // length limit in 128th notes
     let length_limit = converges_over_bars * time_signature.to_128th();
-    println!("LENGTH LIMIT: {}", length_limit);
 
     let to_event_grid = |part| {
-        println!("FLATTENING {:?}", part);
         match groups.get(part) {
             Some(groups) => {
                 let length_128th = length_map.get(part).unwrap();
                 let times = length_limit / length_128th;
-                println!("TIMES: {}", times);
                 let event_grid = groups_to_event_grid(*part, groups);
                 (event_grid, times)
             }
@@ -718,11 +711,6 @@ fn merge_into_iterator(
     let (snare_grid, snare_repeats) = to_event_grid(&SnareDrum);
     let (hihat_grid, hihat_repeats) = to_event_grid(&HiHat);
     let (crash_grid, crash_repeats) = to_event_grid(&CrashCymbal);
-
-    // println!(
-    //     "CYCLED TO: {:?}",
-    //     cycle_grid(crash_grid.clone(), Times(crash_repeats as u16))
-    // );
 
     EventIterator::new(
         concat_grid(kick_grid, Times(kick_repeats as u16)),
@@ -963,7 +951,6 @@ fn create_tracks<'a>(
     midi_tempo: MidiTempo,
 ) -> Vec<Vec<midly::TrackEvent<'a>>> {
     let events_iter = merge_into_iterator(parts_and_groups, time_signature);
-    println!("EVENTS_ITER: {:?}", events_iter.clone());
     let events: Vec<Event<Tick>> = events_iter.collect();
 
     let track_time = match events.last() {
