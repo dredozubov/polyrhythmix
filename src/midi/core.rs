@@ -230,21 +230,6 @@ impl<T> EventGrid<T> {
 /// Adds two EventGrids together, manipulates the time of the right `EventGrid` by
 /// adding the length of the left one to timings.
 impl EventGrid<Tick> {
-    fn extend(&self, other: EventGrid<Tick>) -> EventGrid<Tick> {
-        // FIXME: get rid of unnecessary cloning
-        let other_events = other.clone().events.into_iter().map(|mut e| {
-            e.tick = e.tick + self.end;
-            e
-        });
-        let mut self_event_copy = self.events.clone();
-        self_event_copy.extend(other_events);
-        EventGrid {
-            events: self_event_copy,
-            start: self.start,
-            end: self.start + self.length() + other.length(),
-        }
-    }
-
     pub fn concat(&self, other: EventGrid<Tick>) -> EventGrid<Tick> {
         // FIXME: get rid of unnecessary cloning
         let other_events = other.clone().events.into_iter().map(|mut e| {
@@ -263,6 +248,24 @@ impl EventGrid<Tick> {
 
 #[test]
 fn test_concat_event_grid() {
+    let empty: EventGrid<Tick> = EventGrid::empty();
+    let kick_on = Event {
+        tick: Tick(0),
+        event_type: NoteOn(KickDrum),
+    };
+    let kick_off = Event {
+        tick: Tick(24),
+        event_type: NoteOff(KickDrum),
+    };
+    let simple_grid = EventGrid {
+        events: vec![kick_on, kick_off],
+        start: Tick(0),
+        end: Tick(48),
+    };
+    assert_eq!(empty.clone().concat(empty.clone()), empty);
+    assert_eq!(simple_grid.clone().concat(empty.clone()), simple_grid);
+    assert_eq!(empty.clone().concat(simple_grid.clone()), simple_grid);
+
     let input = EventGrid {
         events: vec![
             Event {
@@ -283,143 +286,6 @@ fn test_concat_event_grid() {
             events: vec![Event { tick: Tick(12), event_type: NoteOn(HiHat) }, Event { tick: Tick(24), event_type: NoteOff(HiHat) }, Event { tick: Tick(24), event_type: NoteOn(HiHat) }, Event { tick: Tick(36), event_type: NoteOff(HiHat) }],
             start: Tick(12),
             end: Tick(36)
-        }
-    );
-}
-
-#[test]
-fn test_extend_event_grid() {
-    let empty: EventGrid<Tick> = EventGrid::empty();
-    let kick_on = Event {
-        tick: Tick(0),
-        event_type: NoteOn(KickDrum),
-    };
-    let kick_off = Event {
-        tick: Tick(24),
-        event_type: NoteOff(KickDrum),
-    };
-    let simple_grid = EventGrid {
-        events: vec![kick_on, kick_off],
-        start: Tick(0),
-        end: Tick(48),
-    };
-    assert_eq!(empty.clone().extend(empty.clone()), empty);
-    assert_eq!(simple_grid.clone().extend(empty.clone()), simple_grid);
-    assert_eq!(empty.clone().extend(simple_grid.clone()), simple_grid);
-    assert_eq!(
-        simple_grid.clone().extend(simple_grid.clone()),
-        EventGrid {
-            events: vec![
-                Event {
-                    tick: Tick(0),
-                    event_type: NoteOn(KickDrum)
-                },
-                Event {
-                    tick: Tick(24),
-                    event_type: NoteOff(KickDrum)
-                },
-                Event {
-                    tick: Tick(48),
-                    event_type: NoteOn(KickDrum)
-                },
-                Event {
-                    tick: Tick(72),
-                    event_type: NoteOff(KickDrum)
-                }
-            ],
-            start: Tick(0),
-            end: Tick(96)
-        }
-    );
-
-    let events = EventGrid {
-        events: vec![
-            Event {
-                tick: Tick(24),
-                event_type: NoteOn(SnareDrum),
-            },
-            Event {
-                tick: Tick(48),
-                event_type: NoteOff(SnareDrum),
-            },
-            Event {
-                tick: Tick(96),
-                event_type: NoteOn(SnareDrum),
-            },
-            Event {
-                tick: Tick(120),
-                event_type: NoteOff(SnareDrum),
-            },
-        ],
-        start: Tick(24),
-        end: Tick(144),
-    };
-    let expected = EventGrid {
-        events: vec![
-            Event {
-                tick: Tick(24),
-                event_type: NoteOn(SnareDrum),
-            },
-            Event {
-                tick: Tick(48),
-                event_type: NoteOff(SnareDrum),
-            },
-            Event {
-                tick: Tick(96),
-                event_type: NoteOn(SnareDrum),
-            },
-            Event {
-                tick: Tick(120),
-                event_type: NoteOff(SnareDrum),
-            },
-            Event {
-                tick: Tick(144 + 24),
-                event_type: NoteOn(SnareDrum),
-            },
-            Event {
-                tick: Tick(144 + 48),
-                event_type: NoteOff(SnareDrum),
-            },
-            Event {
-                tick: Tick(144 + 96),
-                event_type: NoteOn(SnareDrum),
-            },
-            Event {
-                tick: Tick(144 + 120),
-                event_type: NoteOff(SnareDrum),
-            },
-        ],
-        start: Tick(24),
-        end: Tick(264),
-    };
-    assert_eq!(events.extend(events.clone()), expected);
-
-    let events2_1 = EventGrid::new(
-        vec![
-            Event::new(Tick(0), NoteOn(CrashCymbal)),
-            Event::new(Tick(96), NoteOff(CrashCymbal)),
-        ],
-        Tick(96),
-    );
-    let events2_2: EventGrid<Tick> = EventGrid {
-        events: vec![],
-        start: Tick(96),
-        end: Tick(192),
-    };
-    let result2 = EventGrid::new(events2_1.events.clone(), Tick(192));
-    assert_eq!(events2_1.extend(events2_2), result2);
-
-    let events3 = EventGrid {
-        events: Vec::new(),
-        start: Tick(96),
-        end: Tick(144),
-    };
-    assert_eq!(
-        events3.extend(events3.clone()),
-        EventGrid {
-            events: Vec::new(),
-            start: Tick(96),
-            end: Tick(192)
         }
     );
 }
@@ -619,17 +485,6 @@ fn test_group_to_event_grid() {
     // );
 }
 
-fn cycle_grid(event_grid: EventGrid<Tick>, times: Times) -> EventGrid<Tick> {
-    if times.0 <= 0 {
-        EventGrid::empty()
-    } else {
-        // FIXME: think about unnecessary cloning
-        (0..)
-            .take((times.0 - 1) as usize)
-            .fold(event_grid.clone(), |acc, _| acc.extend(event_grid.clone()))
-    }
-}
-
 fn concat_grid(event_grid: EventGrid<Tick>, times: Times) -> EventGrid<Tick> {
     if times.0 <= 0 {
         EventGrid::empty()
@@ -665,131 +520,6 @@ fn test_concat_grid() {
     );
 }
 
-#[test]
-fn test_cycle_grid() {
-    assert_eq!(
-        cycle_grid(
-            EventGrid {
-                events: Vec::new(),
-                start: Tick(96),
-                end: Tick(144)
-            },
-            Times(2)
-        ),
-        EventGrid {
-            events: Vec::new(),
-            start: Tick(96),
-            end: Tick(192)
-        }
-    );
-
-    let empty: EventGrid<Tick> = EventGrid::empty();
-    assert_eq!(cycle_grid(EventGrid::empty(), Times(2)), empty);
-
-    let simple_grid = EventGrid {
-        events: vec![
-            Event {
-                tick: Tick(0),
-                event_type: NoteOn(KickDrum),
-            },
-            Event {
-                tick: Tick(24),
-                event_type: NoteOff(KickDrum),
-            },
-        ],
-        start: Tick(0),
-        end: Tick(48),
-    };
-    assert_eq!(cycle_grid(simple_grid.clone(), Times(0)), empty);
-
-    assert_eq!(cycle_grid(simple_grid.clone(), Times(1)), simple_grid);
-
-    assert_eq!(
-        cycle_grid(simple_grid.clone(), Times(2)),
-        EventGrid::new(
-            vec![
-                Event {
-                    tick: Tick(0),
-                    event_type: NoteOn(KickDrum)
-                },
-                Event {
-                    tick: Tick(24),
-                    event_type: NoteOff(KickDrum)
-                },
-                Event {
-                    tick: Tick(48),
-                    event_type: NoteOn(KickDrum)
-                },
-                Event {
-                    tick: Tick(72),
-                    event_type: NoteOff(KickDrum)
-                }
-            ],
-            Tick(96)
-        )
-    );
-
-    let events = EventGrid::new(
-        vec![
-            Event {
-                tick: Tick(24),
-                event_type: NoteOn(SnareDrum),
-            },
-            Event {
-                tick: Tick(48),
-                event_type: NoteOff(SnareDrum),
-            },
-            Event {
-                tick: Tick(96),
-                event_type: NoteOn(SnareDrum),
-            },
-            Event {
-                tick: Tick(120),
-                event_type: NoteOff(SnareDrum),
-            },
-        ],
-        Tick(144),
-    );
-    let expected = EventGrid::new(
-        vec![
-            Event {
-                tick: Tick(24),
-                event_type: NoteOn(SnareDrum),
-            },
-            Event {
-                tick: Tick(48),
-                event_type: NoteOff(SnareDrum),
-            },
-            Event {
-                tick: Tick(96),
-                event_type: NoteOn(SnareDrum),
-            },
-            Event {
-                tick: Tick(120),
-                event_type: NoteOff(SnareDrum),
-            },
-            Event {
-                tick: Tick(144 + 24),
-                event_type: NoteOn(SnareDrum),
-            },
-            Event {
-                tick: Tick(144 + 48),
-                event_type: NoteOff(SnareDrum),
-            },
-            Event {
-                tick: Tick(144 + 96),
-                event_type: NoteOn(SnareDrum),
-            },
-            Event {
-                tick: Tick(144 + 120),
-                event_type: NoteOff(SnareDrum),
-            },
-        ],
-        Tick(264),
-    );
-    assert_eq!(cycle_grid(events.clone(), Times(2)), expected);
-}
-
 /// Takes multiple `Group`s and turn them into a single `EventGrid`.
 /// The point of it is to combine timings into a single MIDI track.
 fn groups_to_event_grid(part: Part, groups: &Groups) -> EventGrid<Tick> {
@@ -802,7 +532,9 @@ fn groups_to_event_grid(part: Part, groups: &Groups) -> EventGrid<Tick> {
         println!("(groups_to_event_grid) GRID: {:?}", grid);
         println!("(groups_to_event_grid) NEW GRID: {:?}", grid);
         // Note that using `+` is wrong here as it's messing with timings and it really shouldn't
-        grid = grid.extend(new_grid);
+
+        grid.events.extend(new_grid.events);
+        grid.end = new_grid.end;
         time = grid.end;
     });
     grid
