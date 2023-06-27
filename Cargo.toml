@@ -1,5 +1,6 @@
 [package]
 name = "poly"
+description = "Polyrhythmically-inclinded Midi Drum generator"
 version = "0.1.0"
 edition = "2021"
 

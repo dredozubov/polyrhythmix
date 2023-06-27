@@ -2,11 +2,12 @@ use std::collections::BTreeMap;
 use std::process::exit;
 use std::str::FromStr;
 
-use poly::dsl::dsl::{self, KnownLength, flatten_groups};
-use poly::midi::core::{create_smf, Part};
+use poly::dsl::dsl::{self, flatten_groups, KnownLength};
+use poly::midi::core::{create_smf, DrumPart};
 use poly::midi::time::TimeSignature;
 
 use clap::*;
+use DrumPart::*;
 
 #[derive(Debug, Parser, Clone)]
 #[command(name = "poly")]
@@ -34,21 +35,24 @@ struct Cli {
 
     #[arg(short = 'o', default_value = None)]
     output: Option<String>,
+
+    #[clap(short = 'B', long)]
+    follow_kick_drum_with_bass: bool,
 }
 
-fn part_to_string(part: Part) -> String {
+fn part_to_string(part: DrumPart) -> String {
     match part {
-        Part::KickDrum => String::from("Kick Drum"),
-        Part::SnareDrum => String::from("Snare Drum"),
-        Part::HiHat => String::from("Hi-Hat"),
-        Part::CrashCymbal => String::from("Crash Cymbal"),
+        KickDrum => String::from("Kick Drum"),
+        SnareDrum => String::from("Snare Drum"),
+        HiHat => String::from("Hi-Hat"),
+        CrashCymbal => String::from("Crash Cymbal"),
     }
 }
 
 fn validate_and_parse_part(
     cli: Option<String>,
-    part: Part,
-    patterns: &mut BTreeMap<Part, dsl::Groups>,
+    part: DrumPart,
+    patterns: &mut BTreeMap<DrumPart, dsl::Groups>,
 ) -> () {
     match cli {
         None => {}
@@ -63,7 +67,12 @@ fn validate_and_parse_part(
     }
 }
 
-fn create_text_description(kick: &Option<String>, snare: &Option<String>, hihat: &Option<String>, crash: &Option<String>) -> String {
+fn create_text_description(
+    kick: &Option<String>,
+    snare: &Option<String>,
+    hihat: &Option<String>,
+    crash: &Option<String>,
+) -> String {
     let mut parts: String = "".to_string();
     if kick.is_some() {
         parts.push_str(&format!("\nKick Drum - {}", kick.clone().unwrap()));
@@ -91,6 +100,7 @@ fn main() {
             tempo,
             time_signature,
             output,
+            follow_kick_drum_with_bass,
         } => {
             if kick == None && snare == None && hihat == None && crash == None {
                 println!("No drum pattern was supplied, exiting...");
@@ -103,21 +113,33 @@ fn main() {
                 let text_description = create_text_description(&kick, &snare, &hihat, &crash);
 
                 let mut groups = BTreeMap::new();
-                validate_and_parse_part(kick, Part::KickDrum, &mut groups);
-                validate_and_parse_part(snare, Part::SnareDrum, &mut groups);
-                validate_and_parse_part(hihat, Part::HiHat, &mut groups);
-                validate_and_parse_part(crash, Part::CrashCymbal, &mut groups);
+                validate_and_parse_part(kick, KickDrum, &mut groups);
+                validate_and_parse_part(snare, SnareDrum, &mut groups);
+                validate_and_parse_part(hihat, HiHat, &mut groups);
+                validate_and_parse_part(crash, CrashCymbal, &mut groups);
 
                 let output_file = output.clone();
 
                 match output_file {
                     None => {
                         println!("No output file path was supplied, running a dry run...");
-                        create_smf(groups, signature, text_description.as_str(), tempo)
+                        create_smf(
+                            groups,
+                            signature,
+                            text_description.as_str(),
+                            tempo,
+                            matches.follow_kick_drum_with_bass,
+                        )
                     }
                     Some(path) => {
-                        match create_smf(groups, signature, text_description.as_str(), tempo)
-                            .save(path.clone())
+                        match create_smf(
+                            groups,
+                            signature,
+                            text_description.as_str(),
+                            tempo,
+                            follow_kick_drum_with_bass,
+                        )
+                        .save(path.clone())
                         {
                             Ok(_) => {
                                 println!("{} was written successfully", path);

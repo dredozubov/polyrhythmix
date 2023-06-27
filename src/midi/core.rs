@@ -13,11 +13,13 @@ use midly::{MetaMessage, TrackEvent};
 
 use crate::dsl::dsl::{
     flatten_group, group_or_delimited_group, groups, BasicLength, Group, GroupOrNote, Groups,
-    KnownLength, Length, ModdedLength, Note, Times, SIXTEENTH,
+    KnownLength, Length, ModdedLength, Note, Times, SIXTEENTH, EIGHTH,
 };
 use crate::midi::time::TimeSignature;
 use GroupOrNote::*;
 use Note::*;
+use Part::*;
+use DrumPart::*;
 
 #[allow(dead_code)]
 static BAR_LIMIT: u32 = 1000;
@@ -84,16 +86,20 @@ impl Ord for EventType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
-pub enum Part {
+pub enum DrumPart {
     KickDrum,
     SnareDrum,
     HiHat,
-    CrashCymbal,
+    CrashCymbal
 }
 
-use Part::*;
+use DrumPart::*;
 
-impl Part {
+trait ToMidi {
+    fn to_midi_key(&self) -> u7;
+}
+
+impl ToMidi for DrumPart {
     // https://computermusicresource.com/GM.Percussion.KeyMap.html
     fn to_midi_key(&self) -> u7 {
         match self {
@@ -103,6 +109,21 @@ impl Part {
             CrashCymbal => u7::from(49),
         }
     }
+}
+
+impl ToMidi for Part {
+    fn to_midi_key(&self) -> u7 {
+        match self {
+            Drum(dp) => dp.to_midi_key(),
+            Bass => 28.into(), // low E
+        }       
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
+pub enum Part {
+    Drum(DrumPart),
+    Bass
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -160,15 +181,15 @@ where
 fn test_ord_event_t() {
     let first_on = Event {
         tick: Tick(0),
-        event_type: NoteOn(KickDrum),
+        event_type: NoteOn(Drum(KickDrum)),
     };
     let first_off = Event {
         tick: Tick(24),
-        event_type: NoteOff(KickDrum),
+        event_type: NoteOff(Drum(KickDrum)),
     };
     let second_on = Event {
         tick: Tick(24),
-        event_type: NoteOn(KickDrum),
+        event_type: NoteOn(Drum(KickDrum)),
     };
     assert_eq!(first_on.cmp(&first_off), Less);
     assert_eq!(first_off.cmp(&second_on), Less);
@@ -251,11 +272,11 @@ fn test_concat_event_grid() {
     let empty: EventGrid<Tick> = EventGrid::empty();
     let kick_on = Event {
         tick: Tick(0),
-        event_type: NoteOn(KickDrum),
+        event_type: NoteOn(Drum(KickDrum)),
     };
     let kick_off = Event {
         tick: Tick(24),
-        event_type: NoteOff(KickDrum),
+        event_type: NoteOff(Drum(KickDrum)),
     };
     let simple_grid = EventGrid {
         events: vec![kick_on, kick_off],
@@ -270,11 +291,11 @@ fn test_concat_event_grid() {
         events: vec![
             Event {
                 tick: Tick(12),
-                event_type: NoteOn(HiHat),
+                event_type: NoteOn(Drum(HiHat)),
             },
             Event {
                 tick: Tick(24),
-                event_type: NoteOff(HiHat),
+                event_type: NoteOff(Drum(HiHat)),
             },
         ],
         start: Tick(12),
@@ -283,7 +304,7 @@ fn test_concat_event_grid() {
     assert_eq!(
         input.concat(input.clone()),
         EventGrid {
-            events: vec![Event { tick: Tick(12), event_type: NoteOn(HiHat) }, Event { tick: Tick(24), event_type: NoteOff(HiHat) }, Event { tick: Tick(24), event_type: NoteOn(HiHat) }, Event { tick: Tick(36), event_type: NoteOff(HiHat) }],
+            events: vec![Event { tick: Tick(12), event_type: NoteOn(Drum(HiHat)) }, Event { tick: Tick(24), event_type: NoteOff(Drum(HiHat)) }, Event { tick: Tick(24), event_type: NoteOn(Drum(HiHat)) }, Event { tick: Tick(36), event_type: NoteOff(Drum(HiHat)) }],
             start: Tick(12),
             end: Tick(36)
         }
@@ -466,22 +487,22 @@ fn test_group_to_event_grid() {
     };
     let grid = EventGrid {
         events: vec![
-            Event { tick: Tick(12), event_type: NoteOn(HiHat) },
-            Event { tick: Tick(24), event_type: NoteOff(HiHat) },
-            Event { tick: Tick(24), event_type: NoteOn(HiHat) },
-            Event { tick: Tick(36), event_type: NoteOff(HiHat) }
+            Event { tick: Tick(12), event_type: NoteOn(Drum(HiHat)) },
+            Event { tick: Tick(24), event_type: NoteOff(Drum(HiHat)) },
+            Event { tick: Tick(24), event_type: NoteOn(Drum(HiHat)) },
+            Event { tick: Tick(36), event_type: NoteOff(Drum(HiHat)) }
         ],
         start: start_time,
         end: Tick(36),
     };
-    assert_eq!(group_to_event_grid(&group, HiHat, &start_time), grid);
+    assert_eq!(group_to_event_grid(&group, Drum(HiHat), &start_time), grid);
     // assert_eq!(
     //     group_to_event_grid(
     //         flatten_group(group_or_delimited_group("(2,8x--)").unwrap().1).0.first().unwrap(),
     //         KickDrum,
     //         &start_time
     //     ),
-    //     EventGrid { events: vec![Event { tick: Tick(0), event_type: NoteOn(KickDrum) }, Event { tick: Tick(24), event_type: NoteOff(KickDrum) }, Event { tick: Tick(72), event_type: NoteOn(KickDrum) }, Event { tick: Tick(96), event_type: NoteOff(KickDrum) }], length: Tick(144) }
+    //     EventGrid { events: vec![Event { tick: Tick(0), event_type: NoteOn(Drum(KickDrum)) }, Event { tick: Tick(24), event_type: NoteOff(Drum(KickDrum)) }, Event { tick: Tick(72), event_type: NoteOn(Drum(KickDrum)) }, Event { tick: Tick(96), event_type: NoteOff(Drum(KickDrum)) }], length: Tick(144) }
     // );
 }
 
@@ -504,11 +525,11 @@ fn test_concat_grid() {
                 events: vec![
                     Event {
                         tick: Tick(12),
-                        event_type: NoteOn(HiHat)
+                        event_type: NoteOn(Drum(HiHat))
                     },
                     Event {
                         tick: Tick(24),
-                        event_type: NoteOff(HiHat)
+                        event_type: NoteOff(Drum(HiHat))
                     }
                 ],
                 start: Tick(12),
@@ -516,7 +537,7 @@ fn test_concat_grid() {
             },
             Times(2)
         ),
-        EventGrid { events: vec![Event { tick: Tick(12), event_type: NoteOn(HiHat) }, Event { tick: Tick(24), event_type: NoteOff(HiHat) }, Event { tick: Tick(24), event_type: NoteOn(HiHat) }, Event { tick: Tick(36), event_type: NoteOff(HiHat) }], start: Tick(12), end: Tick(36) }
+        EventGrid { events: vec![Event { tick: Tick(12), event_type: NoteOn(Drum(HiHat)) }, Event { tick: Tick(24), event_type: NoteOff(Drum(HiHat)) }, Event { tick: Tick(24), event_type: NoteOn(Drum(HiHat)) }, Event { tick: Tick(36), event_type: NoteOff(Drum(HiHat)) }], start: Tick(12), end: Tick(36) }
     );
 }
 
@@ -570,7 +591,7 @@ impl Iterator for EventIterator {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let candidates: BTreeMap<Part, Event<Tick>> = [
+        let candidates: BTreeMap<DrumPart, Event<Tick>> = [
             (KickDrum, self.kick.peek()),
             (SnareDrum, self.snare.peek()),
             (HiHat, self.hihat.peek()),
@@ -605,7 +626,7 @@ fn test_event_iterator_impl() {
             .0
             .first()
             .unwrap(),
-        KickDrum,
+        Drum(KickDrum),
         &mut Tick(0),
     );
     let snare1 = group_to_event_grid(
@@ -613,7 +634,7 @@ fn test_event_iterator_impl() {
             .0
             .first()
             .unwrap(),
-        SnareDrum,
+        Drum(SnareDrum),
         &mut Tick(0),
     );
 
@@ -630,19 +651,19 @@ fn test_event_iterator_impl() {
         vec![
             Event {
                 tick: Tick(0),
-                event_type: NoteOn(KickDrum)
+                event_type: NoteOn(Drum(KickDrum))
             },
             Event {
                 tick: Tick(48),
-                event_type: NoteOff(KickDrum)
+                event_type: NoteOff(Drum(KickDrum))
             },
             Event {
                 tick: Tick(48),
-                event_type: NoteOn(SnareDrum)
+                event_type: NoteOn(Drum(SnareDrum))
             },
             Event {
                 tick: Tick(96),
-                event_type: NoteOff(SnareDrum)
+                event_type: NoteOff(Drum(SnareDrum))
             }
         ]
     );
@@ -660,11 +681,11 @@ fn test_event_iterator_impl() {
         [
             Event {
                 tick: Tick(0),
-                event_type: NoteOn(KickDrum)
+                event_type: NoteOn(Drum(KickDrum))
             },
             Event {
                 tick: Tick(48),
-                event_type: NoteOff(KickDrum)
+                event_type: NoteOff(Drum(KickDrum))
             }
         ]
     );
@@ -675,11 +696,11 @@ fn test_event_iterator_impl() {
 ///
 /// Returns time as a number of ticks from beginning, has to be turned into the midi delta-time.
 fn merge_into_iterator(
-    groups: BTreeMap<Part, Groups>,
+    groups: &BTreeMap<DrumPart, Groups>,
     time_signature: TimeSignature,
 ) -> EventIterator {
     // Maps a drum part to a number of 128th notes
-    let length_map: BTreeMap<Part, u32> = groups.iter().map(|(k, x)| (*k, x.to_128th())).collect();
+    let length_map: BTreeMap<DrumPart, u32> = groups.iter().map(|(k, x)| (*k, x.to_128th())).collect();
 
     // We want exactly length_limit or BAR_LIMIT
     let converges_over_bars = time_signature
@@ -695,12 +716,12 @@ fn merge_into_iterator(
     // length limit in 128th notes
     let length_limit = converges_over_bars * time_signature.to_128th();
 
-    let to_event_grid = |part| {
+    let to_event_grid = |part: &DrumPart| {
         match groups.get(part) {
             Some(groups) => {
                 let length_128th = length_map.get(part).unwrap();
                 let times = length_limit / length_128th;
-                let event_grid = groups_to_event_grid(*part, groups);
+                let event_grid = groups_to_event_grid(Drum(*part), groups);
                 (event_grid, times)
             }
             None => (EventGrid::empty(), 0),
@@ -729,154 +750,154 @@ fn test_merge_into_iterator() {
     let kick_events = vec![
         Event {
             tick: Tick(0),
-            event_type: NoteOn(KickDrum),
+            event_type: NoteOn(Drum(KickDrum)),
         },
         Event {
             tick: Tick(12),
-            event_type: NoteOff(KickDrum),
+            event_type: NoteOff(Drum(KickDrum)),
         },
         Event {
             tick: Tick(12),
-            event_type: NoteOn(KickDrum),
+            event_type: NoteOn(Drum(KickDrum)),
         },
         Event {
             tick: Tick(24),
-            event_type: NoteOff(KickDrum),
+            event_type: NoteOff(Drum(KickDrum)),
         },
         Event {
             tick: Tick(36),
-            event_type: NoteOn(KickDrum),
+            event_type: NoteOn(Drum(KickDrum)),
         },
         Event {
             tick: Tick(48),
-            event_type: NoteOff(KickDrum),
+            event_type: NoteOff(Drum(KickDrum)),
         },
         Event {
             tick: Tick(60),
-            event_type: NoteOn(KickDrum),
+            event_type: NoteOn(Drum(KickDrum)),
         },
         Event {
             tick: Tick(72),
-            event_type: NoteOff(KickDrum),
+            event_type: NoteOff(Drum(KickDrum)),
         },
         Event {
             tick: Tick(72),
-            event_type: NoteOn(KickDrum),
+            event_type: NoteOn(Drum(KickDrum)),
         },
         Event {
             tick: Tick(84),
-            event_type: NoteOff(KickDrum),
+            event_type: NoteOff(Drum(KickDrum)),
         },
         Event {
             tick: Tick(96),
-            event_type: NoteOn(KickDrum),
+            event_type: NoteOn(Drum(KickDrum)),
         },
         Event {
             tick: Tick(108),
-            event_type: NoteOff(KickDrum),
+            event_type: NoteOff(Drum(KickDrum)),
         },
         Event {
             tick: Tick(108),
-            event_type: NoteOn(KickDrum),
+            event_type: NoteOn(Drum(KickDrum)),
         },
         Event {
             tick: Tick(120),
-            event_type: NoteOff(KickDrum),
+            event_type: NoteOff(Drum(KickDrum)),
         },
         Event {
             tick: Tick(132),
-            event_type: NoteOn(KickDrum),
+            event_type: NoteOn(Drum(KickDrum)),
         },
         Event {
             tick: Tick(144),
-            event_type: NoteOff(KickDrum),
+            event_type: NoteOff(Drum(KickDrum)),
         },
         Event {
             tick: Tick(156),
-            event_type: NoteOn(KickDrum),
+            event_type: NoteOn(Drum(KickDrum)),
         },
         Event {
             tick: Tick(168),
-            event_type: NoteOff(KickDrum),
+            event_type: NoteOff(Drum(KickDrum)),
         },
         Event {
             tick: Tick(168),
-            event_type: NoteOn(KickDrum),
+            event_type: NoteOn(Drum(KickDrum)),
         },
         Event {
             tick: Tick(180),
-            event_type: NoteOff(KickDrum),
+            event_type: NoteOff(Drum(KickDrum)),
         },
     ];
     let snare_events = vec![
         Event {
             tick: Tick(24),
-            event_type: NoteOn(SnareDrum),
+            event_type: NoteOn(Drum(SnareDrum)),
         },
         Event {
             tick: Tick(48),
-            event_type: NoteOff(SnareDrum),
+            event_type: NoteOff(Drum(SnareDrum)),
         },
         Event {
             tick: Tick(96),
-            event_type: NoteOn(SnareDrum),
+            event_type: NoteOn(Drum(SnareDrum)),
         },
         Event {
             tick: Tick(120),
-            event_type: NoteOff(SnareDrum),
+            event_type: NoteOff(Drum(SnareDrum)),
         },
         Event {
             tick: Tick(24 + 144),
-            event_type: NoteOn(SnareDrum),
+            event_type: NoteOn(Drum(SnareDrum)),
         },
         Event {
             tick: Tick(48 + 144),
-            event_type: NoteOff(SnareDrum),
+            event_type: NoteOff(Drum(SnareDrum)),
         },
         Event {
             tick: Tick(96 + 144),
-            event_type: NoteOn(SnareDrum),
+            event_type: NoteOn(Drum(SnareDrum)),
         },
         Event {
             tick: Tick(120 + 144),
-            event_type: NoteOff(SnareDrum),
+            event_type: NoteOff(Drum(SnareDrum)),
         },
         Event {
             tick: Tick(24 + 288),
-            event_type: NoteOn(SnareDrum),
+            event_type: NoteOn(Drum(SnareDrum)),
         },
         Event {
             tick: Tick(48 + 288),
-            event_type: NoteOff(SnareDrum),
+            event_type: NoteOff(Drum(SnareDrum)),
         },
         Event {
             tick: Tick(96 + 288),
-            event_type: NoteOn(SnareDrum),
+            event_type: NoteOn(Drum(SnareDrum)),
         },
         Event {
             tick: Tick(120 + 288),
-            event_type: NoteOff(SnareDrum),
+            event_type: NoteOff(Drum(SnareDrum)),
         },
         Event {
             tick: Tick(24 + 144 * 3),
-            event_type: NoteOn(SnareDrum),
+            event_type: NoteOn(Drum(SnareDrum)),
         },
         Event {
             tick: Tick(48 + 144 * 3),
-            event_type: NoteOff(SnareDrum),
+            event_type: NoteOff(Drum(SnareDrum)),
         },
         Event {
             tick: Tick(96 + 144 * 3),
-            event_type: NoteOn(SnareDrum),
+            event_type: NoteOn(Drum(SnareDrum)),
         },
         Event {
             tick: Tick(120 + 144 * 3),
-            event_type: NoteOff(SnareDrum),
+            event_type: NoteOff(Drum(SnareDrum)),
         },
     ];
     let four_fourth = TimeSignature::from_str("4/4").unwrap();
     let flattened_kick_and_snare = merge_into_iterator(
-        BTreeMap::from_iter([
+        &BTreeMap::from_iter([
             (KickDrum, groups("16xx-x-xx-").unwrap().1),
             (SnareDrum, groups("8-x--x-").unwrap().1),
         ]),
@@ -886,7 +907,7 @@ fn test_merge_into_iterator() {
 
     assert_eq!(
         merge_into_iterator(
-            BTreeMap::from_iter([(KickDrum, groups(kick_group).unwrap().1)]),
+            &BTreeMap::from_iter([(KickDrum, groups(kick_group).unwrap().1)]),
             four_fourth
         )
         .collect::<Vec<Event<Tick>>>(),
@@ -894,7 +915,7 @@ fn test_merge_into_iterator() {
     );
     assert_eq!(
         merge_into_iterator(
-            BTreeMap::from_iter([(SnareDrum, groups(snare_group).unwrap().1)]),
+            &BTreeMap::from_iter([(SnareDrum, groups(snare_group).unwrap().1)]),
             four_fourth
         )
         .collect::<Vec<Event<Tick>>>(),
@@ -913,12 +934,13 @@ fn test_merge_into_iterator() {
 
 // The length of a beat is not standard, so in order to fully describe the length of a MIDI tick the MetaMessage::Tempo event should be present.
 pub fn create_smf<'a>(
-    groups: BTreeMap<Part, Groups>,
+    groups: BTreeMap<DrumPart, Groups>,
     time_signature: TimeSignature,
     text: &'a str,
     tempo: u16,
+    add_bass: bool
 ) -> Smf<'a> {
-    let tracks = create_tracks(groups, time_signature, text, MidiTempo::from_tempo(tempo));
+    let tracks = create_tracks(groups, time_signature, text, MidiTempo::from_tempo(tempo), add_bass);
     // https://majicdesigns.github.io/MD_MIDIFile/page_timing.html
     // says " If it is not specified the MIDI default is 48 ticks per quarter note."
     // As it's required in `Header`, let's use the same value.
@@ -945,12 +967,13 @@ pub fn create_smf<'a>(
 /// Multi-track vectors of MIDI events in `midly` format.
 ///
 fn create_tracks<'a>(
-    parts_and_groups: BTreeMap<Part, Groups>,
+    parts_and_groups: BTreeMap<DrumPart, Groups>,
     time_signature: TimeSignature,
     text_event: &'a str,
     midi_tempo: MidiTempo,
+    add_bass: bool
 ) -> Vec<Vec<midly::TrackEvent<'a>>> {
-    let events_iter = merge_into_iterator(parts_and_groups, time_signature);
+    let events_iter = merge_into_iterator(&parts_and_groups, time_signature);
     let events: Vec<Event<Tick>> = events_iter.collect();
 
     let track_time = match events.last() {
@@ -961,40 +984,40 @@ fn create_tracks<'a>(
     };
     let event_grid_tick = EventGrid::new(events, track_time);
     let event_grid = event_grid_tick.to_delta();
-    let mut drums = Vec::new();
+    let mut drums_track = Vec::new();
 
     // This is likely to be specific to Guitar Pro. Tested with Guitar Pro 7.
-    drums.push(TrackEvent {
+    drums_track.push(TrackEvent {
         delta: 0.into(),
         kind: TrackEventKind::Midi {
             channel: 9.into(),
             message: MidiMessage::ProgramChange { program: 0.into() },
         },
     });
-    drums.push(TrackEvent {
+    drums_track.push(TrackEvent {
         delta: 0.into(),
         kind: TrackEventKind::Meta(MetaMessage::TrackName(b"Drumkit")),
     });
-    drums.push(TrackEvent {
+    drums_track.push(TrackEvent {
         delta: 0.into(),
         kind: TrackEventKind::Meta(MetaMessage::InstrumentName(b"Drumkit")),
     });
-    drums.push(TrackEvent {
+    drums_track.push(TrackEvent {
         delta: 0.into(),
         kind: TrackEventKind::Meta(MetaMessage::MidiChannel(10.into())),
     });
-    drums.push(TrackEvent {
+    drums_track.push(TrackEvent {
         delta: 0.into(),
         kind: TrackEventKind::Meta(MetaMessage::MidiPort(10.into())),
     });
 
-    drums.push(TrackEvent {
+    drums_track.push(TrackEvent {
         delta: 0.into(),
         kind: TrackEventKind::Meta(MetaMessage::Tempo(midi_tempo.0)),
     });
 
     let (midi_time_signature_numerator, midi_time_signature_denominator) = time_signature.to_midi();
-    drums.push(TrackEvent {
+    drums_track.push(TrackEvent {
         delta: 0.into(),
         kind: TrackEventKind::Meta(MetaMessage::TimeSignature(
             midi_time_signature_numerator,
@@ -1004,34 +1027,64 @@ fn create_tracks<'a>(
         )),
     });
 
-    drums.push(TrackEvent {
+    drums_track.push(TrackEvent {
         delta: 0.into(),
         kind: TrackEventKind::Meta(MetaMessage::Text(text_event.as_bytes())),
     });
 
-    for event in event_grid.events {
-        let midi_message = match event.event_type {
-            NoteOn(part) => MidiMessage::NoteOn {
-                key: part.to_midi_key(),
-                vel: 127.into(),
-            },
-            NoteOff(part) => MidiMessage::NoteOff {
-                key: part.to_midi_key(),
-                vel: 127.into(),
-            },
-        };
-        drums.push(TrackEvent {
-            delta: u28::from(event.tick.0 as u32),
-            kind: TrackEventKind::Midi {
-                channel: u4::from(10),
-                message: midi_message,
-            },
-        })
-    }
-    drums.push(TrackEvent {
-        delta: drums.last().unwrap().delta,
+    let map_notes = |grid: EventGrid<Delta>, track: &mut Vec<TrackEvent>| {
+        for event in grid.events {
+            let midi_message = match event.event_type {
+                NoteOn(part) => MidiMessage::NoteOn {
+                    key: part.to_midi_key(),
+                    vel: 127.into(),
+                },
+                NoteOff(part) => MidiMessage::NoteOff {
+                    key: part.to_midi_key(),
+                    vel: 127.into(),
+                },
+            };
+            track.push(TrackEvent {
+                delta: u28::from(event.tick.0 as u32),
+                kind: TrackEventKind::Midi {
+                    channel: u4::from(10),
+                    message: midi_message,
+                },
+            })
+        }
+    };
+
+    map_notes(event_grid, &mut drums_track);
+
+    drums_track.push(TrackEvent {
+        delta: drums_track.last().unwrap().delta,
         kind: TrackEventKind::Meta(MetaMessage::EndOfTrack),
     });
 
-    vec![drums]
+    if add_bass {
+        let mut bass_track = Vec::new();
+        let empty_groups = Groups(Vec::new());
+        let kick = parts_and_groups.get(&KickDrum).unwrap_or(&empty_groups);
+        let bass = groups_to_event_grid(Bass, kick);
+        // This is likely to be specific to Guitar Pro. Tested with Guitar Pro 7.
+        bass_track.push(TrackEvent {
+            delta: 0.into(),
+            kind: TrackEventKind::Midi {
+                channel: 0.into(),
+                message: MidiMessage::ProgramChange { program: 34.into() },
+            },
+        });
+        bass_track.push(TrackEvent {
+            delta: 0.into(),
+            kind: TrackEventKind::Meta(MetaMessage::TrackName(b"Bass")),
+        });
+        bass_track.push(TrackEvent {
+            delta: 0.into(),
+            kind: TrackEventKind::Meta(MetaMessage::InstrumentName(b"Bass")),
+        });
+        map_notes(bass.to_delta(), &mut bass_track);
+        vec![drums_track, bass_track]
+    } else {
+        vec![drums_track]
+    }
 }
