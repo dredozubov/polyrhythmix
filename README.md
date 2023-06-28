@@ -1,12 +1,12 @@
 # Polyrhythmix
 
-Polyrhythmix (Poly) is a command-line assistant designed to generate MIDI file from the description of drum parts. It provides a convenient way to input a DSL (Domain-Specific Language) in the command line, then it calculates when the drum parts will converge together, making it easy to compose polyrhythimic parts with frequent shifts over the bar lines. Additionally, it has the capability to generate a bass MIDI track that follows the kick drum.
+Polyrhythmix (Poly) is a command-line assistant designed to generate MIDI files from the description of drum parts. It provides a convenient way to input a DSL (Domain-Specific Language) in the command line, then it calculates when the drum parts will converge together, making it easy to compose polyrhythmic parts with frequent shifts over the bar lines. Additionally, it can generate a bass MIDI track that follows the kick drum.
 
 Polyrhythmix is specifically designed to assist musicians and composers working in genres such as modern progressive rock, metal, djent, fusion, and Indian Carnatic music. It aims to simplify the process of creating complex polyrhythmic drum patterns, enabling users to focus on the creative aspects of their compositions.
 
 # Motivation
 
-I'm a guitar player, and I use tablature notation editors such as Guitar Pro a lot. However, it gets complicated fast to write a polyrhythmic/polymetric drum parts as shifts tend to go over the bar lines. The other property of such parts is: it tend to unfold in a simple way from simple ideas such as "I want to create a drum part that will have a 3 against 4 feel with a kick drum against a snare drum". The other way to think about it is that it has a simple blueprint, but it's tricky and error-prone to express in the western musical notation. This is why `Polyrhythmix` exists. I wanted to have a simple tool to workshop/brainstorm rhythmic ideas and evaluate them by having a MIDI playback. I'm into modern progressive rock/metal music, fusion, so it all applies very well. I have an impression it may be useful for indian carnatic music as well, but I would like to get some insightful confirmation on that.
+I'm a guitar player, and I use tablature notation editors such as Guitar Pro a lot. However, it gets complicated fast when you write polyrhythmic/polymetric drum parts, because shifts tend to go over the bar lines. The other property of such parts is: it tends to unfold from simple ideas such as "I want to create a drum part that will have a 3 against 4 feel with a kick drum against a snare drum". The other way to think about it is that it has a simple blueprint, but it's tricky and error-prone to express in Western musical notation. This is why `Polyrhythmix` exists. I wanted to have a simple tool to workshop/brainstorm rhythmic ideas and evaluate them by having a MIDI playback. I'm into modern Progressive Rock/Metal music, Fusion, so it all applies very well. I have an impression it may be useful for Indian Carnatic music as well, but I would like to get some insightful confirmation on that.
 
 # Features
 
@@ -18,7 +18,7 @@ I'm a guitar player, and I use tablature notation editors such as Guitar Pro a l
 
 # Installation
 
-For Rust developers (or other people who has cargo on their machine):
+For Rust developers (or other people who have cargo on their machine):
 
 ```
 cargo install polyrhythmix
@@ -78,7 +78,7 @@ Converges over 3 bars
 out.mid was written successfully
 ```
 
-Polyrhythmix operates under an assumption, that it's easy to replicate a pattern that converges over a finite number of bars in the DAW or tablature editor, so it only generates 3 bars of drums in this case. On Mac OS, I usually do something in lines of `poly <OPTIONS> -o out.mid && open out.mid` or `poly <OPTIONS> -o out.mid && open -a 'Guitar Pro 7' out.mid`.
+Polyrhythmix operates under the assumption that it's easy to replicate a fully converged pattern in the DAW or tablature editor, so it only generates 3 bars of drums in this case. On Mac OS, I usually do something in lines of `poly <OPTIONS> -o out.mid && open out.mid` or `poly <OPTIONS> -o out.mid && open -a 'Guitar Pro 7' out.mid`.
 
 This way it defaults to 4/4 as a time signature, but we may want to interpret this rhythmic pattern in 3/4 for example. Let's try it:
 
@@ -113,17 +113,19 @@ poly -t 115 -K '32xx16xx' -H '8x' -S '4--x-' -B -o bleed.mid
 
 Congratulations, now you have a basic version of "[Bleed](doc/bleed.mid)" by Meshuggah!
 
+To get to the next level, you need to understand that note groups can be recursive if you nest them. For example `(3,8x(3,16x-xx(3,32xx-x))))` would read as "Three 
+
 # DSL overview
 
-Any pattern can be described by a series of note groups. All note in the note group have the same length. Possible lengths are:
+Any pattern can be described by a series of note groups. All notes in the note group have the same length. Possible lengths are:
 * `1` - Whole note
 * `2` - Half note
 * `4` - Fourth note
 * `8` - Eighth note
 * `16` - Sixteenth note
-* `32` - Thirty secondth note
-* `64` - Sixty Fourth note
-* `.` - dotted note (meaning it has 1.5 length of the unmodified duration). Dot should be applied after the basic length like this: `8.`
+* `32` - Thirty-second note
+* `64` - Sixty-Fourth note
+* `.` - dotted note (meaning it has 1.5 lengths of unmodified duration). Dot should be applied after the basic length like this: `8.`
 * `t` - Triplet notes, should be applied after basic lengths and dots. e.g. `4.t` means triplets of dotted fourth notes.
 
 Now let's talk about the drums. `Poly` has a logic similar to a drum machine, so we only concern ourselves with drum hits and rests:
@@ -131,14 +133,17 @@ Now let's talk about the drums. `Poly` has a logic similar to a drum machine, so
 * `-` - Rest
 
 Let's compose a few simple note groups:
-* `4x` - a group of one fourth note.
+* `4x` - a group of a single fourth note.
 * `8.-x` a group of a rest and a drum hit. Both rest and hit have a length of 8th dotted note each.
 
-It's possible to repeat a group of notes of same length with the following syntax:
+It's possible to repeat a group of notes of the same length with the following syntax:
 * `(3,8x-x)` means repeat three times a series of hit, rest, hit in eighth notes
 
 Now that we know that, we may sequence multiple groups like this:
 * `32xx16xx` - Kick pattern from "[Bleed](doc/bleed.mid)" by Meshuggah
+
+Note groups can be nested within each other, which interacts in interesting way with repeats:
+* `(3,16x(3,8txxx(3,32x-x-x-)))` I'm struggling to make a compelling example, so here's a triple-nested pattern that converges over 471 bars of 4/4
 
 ## Guitar pro remarks
 
