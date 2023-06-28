@@ -8,6 +8,14 @@ Poly is specifically designed to assist musicians and composers working in genre
 
 I'm a guitar player, and I use tablature notation editors such as Guitar Pro a lot. However, it gets complicated fast to write a polyrhythmic/polymetric drum parts as shifts tend to go over the bar lines. The other property of such parts is: it tend to unfold in a simple way from simple ideas such as "I want to create a drum part that will have a 3 against 4 feel with a kick drum against a snare drum". The other way to think about it is that it has a simple blueprint, but it's tricky to express in the western musical notation. This is why `Poly` exists. I wanted to have a simple tool to workshop/brainstorm rhythmic ideas and evaluate them by having a MIDI playback. I'm into modern progressive rock/metal music, fusion, so it all applies very well. I have an impression it may be useful for indian carnatic music as well, but I would like to get some insightful confirmation on that.
 
+# Features
+
+**Drum Generation**: Poly takes a DSL input to define polyrhythmic patterns for various drum instruments. It intelligently calculates when different drum parts will converge, ensuring rhythmic synchronization.
+
+**MIDI File Generation**: Once the polyrhythmic pattern is defined, Poly generates a MIDI file containing the drum parts. This file can be imported into any compatible software or hardware for further editing or playback.
+
+**Bass Track Generation**: Poly offers an option to generate a bass MIDI track that follows the kick drum. This feature provides a foundation for creating cohesive rhythm sections by synchronizing the bassline with the kick drum pattern.
+
 # Usage
 
 Poly runs as an executable with the desired command line options. The available options are as follows:
@@ -132,4 +140,9 @@ Don't forget to quantize MIDI imports to 64th notes as it gets increasingly craz
 ![Guitar Pro Import](doc/Guitar-Pro-Import.png)
 
 
+# Contributing
+Contributions are very welcome, feel free to open issues, open pull requests, and give me feedback regarding this piece of software.
 
+# Contact
+
+If you encounter issues or have questions about using Poly,  please feel free to reach out to me [via email](mailto://denis.redozubov@gmail.com).
