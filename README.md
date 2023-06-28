@@ -95,7 +95,7 @@ Let's try one more thing:
 poly -t 115 -K '32xx16xx' -H '8x' -S '4--x-' -B -o bleed.mid
 ```
 
-Congratulations, now you have a basic version of "Bleed" by Meshuggah!
+Congratulations, now you have a basic version of "[Bleed](doc/bleed.mid)" by Meshuggah!
 
 # DSL overview
 
