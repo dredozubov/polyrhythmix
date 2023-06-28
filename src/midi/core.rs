@@ -985,6 +985,7 @@ fn create_tracks<'a>(
     add_bass: bool
 ) -> Vec<Vec<midly::TrackEvent<'a>>> {
     let events_iter = merge_into_iterator(&parts_and_groups, time_signature);
+    let bars = events_iter.bars.clone();
     let events: Vec<Event<Tick>> = events_iter.collect();
 
     let track_time = match events.last() {
@@ -1093,7 +1094,8 @@ fn create_tracks<'a>(
             delta: 0.into(),
             kind: TrackEventKind::Meta(MetaMessage::InstrumentName(b"Bass")),
         });
-        map_notes(bass.to_delta(), &mut bass_track);
+        let times = bars * time_signature.to_128th() / kick.to_128th();
+        map_notes(concat_grid(bass, Times(times as u16)).to_delta(), &mut bass_track);
         vec![drums_track, bass_track]
     } else {
         vec![drums_track]
