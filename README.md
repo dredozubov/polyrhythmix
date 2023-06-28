@@ -89,6 +89,14 @@ poly --time-signature '4/4' --tempo 138 --crash '4x---' --hi-hat '8.t-xxx' --kic
 
 Now we have two tracks in the output file and you can change the bass notes to create an expected harmonic context.
 
+Let's try one more thing:
+
+```
+poly -t 115 -K '32xx16xx' -H '8x' -S '4--x-' -B -o bleed.mid
+```
+
+Congratulations, now you have a basic version of "Bleed" by Meshuggah!
+
 # DSL overview
 
 Any pattern can be described by a series of note groups. All note in the note group have the same length. Possible lengths are:
@@ -109,6 +117,12 @@ Now let's talk about the drums. `Poly` has a logic similar to a drum machine, so
 Let's compose a few simple note groups:
 * `4x` - a group of one fourth note.
 * `8.-x` a group of a rest and a drum hit. Both rest and hit have a length of 8th dotted note each.
+
+It's possible to repeat a group of notes of same length with the following syntax:
+* `(3,8x-x)` means repeat three times a series of hit, rest, hit in eighth notes
+
+Now that we know that, we may sequence multiple groups like this:
+* `32xx16xx` - Kick pattern from "Bleed" by Meshuggah
 
 ...
 
