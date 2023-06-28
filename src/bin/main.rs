@@ -15,28 +15,28 @@ use DrumPart::*;
 #[command(version = "0.1")]
 #[command(about = "Polyrhythmically-inclinded Midi Drum generator", long_about = None)]
 struct Cli {
-    #[arg(short = 'K', default_value = None, help = "Kick drum pattern")]
+    #[arg(short = 'K', long = "kick", default_value = None, help = "Kick drum pattern")]
     kick: Option<String>,
 
-    #[arg(short = 'S', default_value = None, help = "Snare drum pattern")]
+    #[arg(short = 'S', long = "snare", default_value = None, help = "Snare drum pattern")]
     snare: Option<String>,
 
-    #[arg(short = 'H', default_value = None, help = "Hi-Hat pattern")]
+    #[arg(short = 'H', long = "hi-hat", default_value = None, help = "Hi-Hat pattern")]
     hihat: Option<String>,
 
-    #[arg(short = 'C', default_value = None, help = "Crash cymbal pattern")]
+    #[arg(short = 'C', long = "crash", default_value = None, help = "Crash cymbal pattern")]
     crash: Option<String>,
 
-    #[arg(short = 't', default_value = "120", help = "Tempo value")]
+    #[arg(short = 't', long = "tempo", default_value = "120", help = "Tempo value")]
     tempo: u16,
 
-    #[arg(short = 's', default_value = "4/4", help = "Time signature")]
+    #[arg(short = 's', long = "time-signature", default_value = "4/4", help = "Time signature")]
     time_signature: String,
 
-    #[arg(short = 'o', default_value = None, help = "Output file path, dry-run if omitted")]
+    #[arg(short = 'o', long = "output-file", default_value = None, help = "Output file path, make a dry run if omitted")]
     output: Option<String>,
 
-    #[clap(short = 'B', long, help = "Generate a second MIDI track for the bass following the kick drum")]
+    #[clap(short = 'B', long = "follow-kick-drum-with-bass", help = "Generate a second MIDI track for the bass following the kick drum")]
     follow_kick_drum_with_bass: bool,
 }
 
