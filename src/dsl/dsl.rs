@@ -186,6 +186,11 @@ impl KnownLength for ModdedLength {
     }
 }
 
+#[test]
+fn test_known_length_modded_length() {
+    assert_eq!(ModdedLength::Dotted(BasicLength::Eighth).to_128th(), 24);
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Length {
     Simple(ModdedLength),
@@ -201,6 +206,14 @@ impl KnownLength for Length {
             Length::Triplet(ml) => ml.to_128th() * 2 / 3,
         }
     }
+}
+
+#[test]
+fn test_known_length_of_length() {
+    let dotted_eighth = ModdedLength::Dotted(BasicLength::Eighth);
+    let triplet_dotted_eighth = Length::Triplet(dotted_eighth);
+    assert_eq!(Length::Tied(dotted_eighth, dotted_eighth).to_128th(), 48);
+    assert_eq!(triplet_dotted_eighth.to_128th(), 16);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
