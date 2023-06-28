@@ -1,8 +1,9 @@
 extern crate derive_more;
 
-use std::{str::FromStr};
+use std::{cmp::Ordering, str::FromStr};
 
-use crate::dsl::dsl::{BasicLength, GroupOrNote, KnownLength, Note};
+use crate::dsl::dsl::{BasicLength, GroupOrNote, KnownLength, Note, Group, groups, Times, EIGHTH, FOURTH};
+
 use BasicLength::*;
 #[allow(unused_imports)]
 use Note::*;

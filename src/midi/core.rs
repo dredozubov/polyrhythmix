@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use std::cmp::Ordering::*;
 use std::collections::BTreeMap;
 use std::iter::Peekable;
+use std::{str::FromStr};
 
 use midly::{
     num::u24, num::u28, num::u4, num::u7, Header, MidiMessage, Smf, TrackEventKind,
@@ -11,8 +12,11 @@ use midly::{MetaMessage, TrackEvent};
 
 use crate::dsl::dsl::{
     BasicLength, Group, GroupOrNote, Groups,
-    KnownLength, Length, ModdedLength, Note, Times
+    KnownLength, Length, ModdedLength, Note, Times,
+    groups, group_or_delimited_group, flatten_group,
+    EIGHTH, FOURTH, SIXTEENTH
 };
+
 use crate::midi::time::TimeSignature;
 #[allow(unused_imports)]
 use GroupOrNote::*;
