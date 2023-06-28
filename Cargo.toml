@@ -17,6 +17,6 @@ path = "src/bin/main.rs"
 [dependencies]
 nom = "7.1.3"
 midly = "0.5.3"
-derive_more = "*"
+derive_more = "0.99.17"
 clap = { version = "4.2.7", features = ["derive"] }
 dyn-clone = "1.0.11"
