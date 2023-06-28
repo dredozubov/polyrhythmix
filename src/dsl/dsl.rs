@@ -209,6 +209,7 @@ pub enum Note {
     Rest,
 }
 
+#[allow(unused_imports)]
 use Note::*;
 
 #[allow(dead_code)]
@@ -293,6 +294,7 @@ pub enum GroupOrNote<T> {
     SingleNote(Note),
 }
 
+#[allow(unused_imports)]
 use GroupOrNote::*;
 
 /// There are two useful instantiations of this type:
@@ -355,7 +357,7 @@ impl KnownLength for Group<Note, ()> {
     fn to_128th(&self) -> u32 {
         let mut acc = 0;
         let note_length = self.length.to_128th();
-        for group in self.notes.iter() {
+        for _ in self.notes.iter() {
             acc += note_length;
         }
         acc

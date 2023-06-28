@@ -1,10 +1,12 @@
 extern crate derive_more;
 
-use std::{cmp::Ordering, str::FromStr};
+use std::{str::FromStr};
 
-use crate::dsl::dsl::{BasicLength, Group, GroupOrNote, KnownLength, Note, Times, EIGHTH, FOURTH};
+use crate::dsl::dsl::{BasicLength, GroupOrNote, KnownLength, Note};
 use BasicLength::*;
+#[allow(unused_imports)]
 use Note::*;
+#[allow(unused_imports)]
 use GroupOrNote::*;
 
 
@@ -15,13 +17,6 @@ pub struct TimeSignature {
 }
 
 impl TimeSignature {
-    pub(crate) fn new(numerator: u8, denominator: BasicLength) -> Self {
-        Self {
-            numerator,
-            denominator,
-        }
-    }
-
     pub(crate) fn to_midi(&self) -> (u8, u8) {
         let denominator = match self.denominator {
             Whole => 0, // FIXME: should it be an error?
@@ -51,7 +46,7 @@ impl FromStr for TimeSignature {
                 match BasicLength::from_str(d) {
                     Ok(denominator) => match u8::from_str(numerator_str) {
                         Ok(numerator) => Ok(TimeSignature { numerator, denominator }),
-                        Err(e) => Err(format!("Can't parse time signature numerator: {}", s)),
+                        Err(_) => Err(format!("Can't parse time signature numerator: {}", s)),
                     } ,
                     Err(e) => Err(e),
                 }

@@ -3,20 +3,20 @@ use std::cmp::Ordering;
 use std::cmp::Ordering::*;
 use std::collections::BTreeMap;
 use std::iter::Peekable;
-use std::ops::{Add, Mul, Sub};
-use std::str::FromStr;
 
 use midly::{
-    num::u24, num::u28, num::u4, num::u7, Header, MidiMessage, Smf, Track, TrackEventKind,
+    num::u24, num::u28, num::u4, num::u7, Header, MidiMessage, Smf, TrackEventKind,
 };
 use midly::{MetaMessage, TrackEvent};
 
 use crate::dsl::dsl::{
-    flatten_group, group_or_delimited_group, groups, BasicLength, Group, GroupOrNote, Groups,
-    KnownLength, Length, ModdedLength, Note, Times, SIXTEENTH, EIGHTH,
+    BasicLength, Group, GroupOrNote, Groups,
+    KnownLength, Length, ModdedLength, Note, Times
 };
 use crate::midi::time::TimeSignature;
+#[allow(unused_imports)]
 use GroupOrNote::*;
+#[allow(unused_imports)]
 use Note::*;
 use Part::*;
 use DrumPart::*;
@@ -93,6 +93,7 @@ pub enum DrumPart {
     CrashCymbal
 }
 
+#[allow(unused_imports)]
 use DrumPart::*;
 
 trait ToMidi {
@@ -441,7 +442,7 @@ fn group_to_event_grid(
     Group {
         notes,
         length,
-        times,
+        ..
     }: &Group<Note, ()>,
     part: Part,
     start: &Tick,
@@ -565,6 +566,7 @@ pub(crate) struct EventIterator {
     hihat: Peekable<std::vec::IntoIter<Event<Tick>>>,
     crash: Peekable<std::vec::IntoIter<Event<Tick>>>,
     time_signature: TimeSignature,
+    bars: u32
 }
 
 impl EventIterator {
@@ -574,6 +576,7 @@ impl EventIterator {
         hihat_grid: EventGrid<Tick>,
         crash_grid: EventGrid<Tick>,
         time_signature: TimeSignature,
+        bars: u32
     ) -> EventIterator {
         let event_iterator = EventIterator {
             kick: kick_grid.into_iter().peekable(),
@@ -581,6 +584,7 @@ impl EventIterator {
             hihat: hihat_grid.into_iter().peekable(),
             crash: crash_grid.into_iter().peekable(),
             time_signature,
+            bars
         };
         event_iterator
     }
@@ -644,7 +648,8 @@ fn test_event_iterator_impl() {
             snare1.clone(),
             empty.clone(),
             empty.clone(),
-            TimeSignature::from_str("4/4").unwrap()
+            TimeSignature::from_str("4/4").unwrap(),
+            1
         )
         .into_iter()
         .collect::<Vec<Event<Tick>>>(),
@@ -674,7 +679,8 @@ fn test_event_iterator_impl() {
             empty.clone(),
             empty.clone(),
             empty.clone(),
-            TimeSignature::from_str("4/4").unwrap()
+            TimeSignature::from_str("4/4").unwrap(),
+            1
         )
         .into_iter()
         .collect::<Vec<Event<Tick>>>(),
@@ -739,6 +745,7 @@ fn merge_into_iterator(
         concat_grid(hihat_grid, Times(hihat_repeats as u16)),
         concat_grid(crash_grid, Times(crash_repeats as u16)),
         time_signature,
+        converges_over_bars
     )
 }
 

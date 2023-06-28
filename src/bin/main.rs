@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::process::exit;
 use std::str::FromStr;
 
-use poly::dsl::dsl::{self, flatten_groups, KnownLength};
+use poly::dsl::dsl;
 use poly::midi::core::{create_smf, DrumPart};
 use poly::midi::time::TimeSignature;
 

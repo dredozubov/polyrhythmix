@@ -1,6 +1,8 @@
 # Poly
 
-Polyrhythmically-inclinded drum generator.
+Poly is a command-line assistant designed to generate MIDI file from the description of drum parts. It provides a convenient way to input a DSL (Domain-Specific Language) in the command line, then it calculates when the drum parts will converge together, making it easy to compose polyrhythimic parts with frequent shifts over the bar lines. Additionally, it has the capability to generate a bass MIDI track that follows the kick drum.
+
+Poly is specifically designed to assist musicians and composers working in genres such as modern progressive rock, metal, djent, fusion, and Indian Carnatic music. It aims to simplify the process of creating complex polyrhythmic drum patterns, enabling users to focus on the creative aspects of their compositions.
 
 # Motivation
 
