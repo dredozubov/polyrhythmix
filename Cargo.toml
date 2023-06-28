@@ -1,6 +1,10 @@
 [package]
 name = "poly"
 description = "Polyrhythmically-inclinded Midi Drum generator"
+homepage = "https://github.com/dredozubov/poly"
+repository = "https://github.com/dredozubov/poly"
+readme = "README.md"
+license-file = "LICENSE.txt"
 version = "0.1.0"
 edition = "2021"
 
