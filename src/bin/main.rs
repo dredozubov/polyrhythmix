@@ -2,15 +2,15 @@ use std::collections::BTreeMap;
 use std::process::exit;
 use std::str::FromStr;
 
-use poly::dsl::dsl;
-use poly::midi::core::{create_smf, DrumPart};
-use poly::midi::time::TimeSignature;
+use polyrhythmix::dsl::dsl;
+use polyrhythmix::midi::core::{create_smf, DrumPart};
+use polyrhythmix::midi::time::TimeSignature;
 
 use clap::*;
 use DrumPart::*;
 
 #[derive(Debug, Parser, Clone)]
-#[command(name = "poly")]
+#[command(name = "Polyrhythmix")]
 #[command(author = "Denis Redozubov <denis.redozubov@gmail.com>")]
 #[command(version = "0.1")]
 #[command(about = "Polyrhythmically-inclinded Midi Drum generator", long_about = None)]

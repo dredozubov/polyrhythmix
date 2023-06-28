@@ -1,24 +1,24 @@
-# Poly
+# Polyrhythmix
 
-Poly is a command-line assistant designed to generate MIDI file from the description of drum parts. It provides a convenient way to input a DSL (Domain-Specific Language) in the command line, then it calculates when the drum parts will converge together, making it easy to compose polyrhythimic parts with frequent shifts over the bar lines. Additionally, it has the capability to generate a bass MIDI track that follows the kick drum.
+Polyrhythmix (Poly) is a command-line assistant designed to generate MIDI file from the description of drum parts. It provides a convenient way to input a DSL (Domain-Specific Language) in the command line, then it calculates when the drum parts will converge together, making it easy to compose polyrhythimic parts with frequent shifts over the bar lines. Additionally, it has the capability to generate a bass MIDI track that follows the kick drum.
 
-Poly is specifically designed to assist musicians and composers working in genres such as modern progressive rock, metal, djent, fusion, and Indian Carnatic music. It aims to simplify the process of creating complex polyrhythmic drum patterns, enabling users to focus on the creative aspects of their compositions.
+Polyrhythmix is specifically designed to assist musicians and composers working in genres such as modern progressive rock, metal, djent, fusion, and Indian Carnatic music. It aims to simplify the process of creating complex polyrhythmic drum patterns, enabling users to focus on the creative aspects of their compositions.
 
 # Motivation
 
-I'm a guitar player, and I use tablature notation editors such as Guitar Pro a lot. However, it gets complicated fast to write a polyrhythmic/polymetric drum parts as shifts tend to go over the bar lines. The other property of such parts is: it tend to unfold in a simple way from simple ideas such as "I want to create a drum part that will have a 3 against 4 feel with a kick drum against a snare drum". The other way to think about it is that it has a simple blueprint, but it's tricky to express in the western musical notation. This is why `Poly` exists. I wanted to have a simple tool to workshop/brainstorm rhythmic ideas and evaluate them by having a MIDI playback. I'm into modern progressive rock/metal music, fusion, so it all applies very well. I have an impression it may be useful for indian carnatic music as well, but I would like to get some insightful confirmation on that.
+I'm a guitar player, and I use tablature notation editors such as Guitar Pro a lot. However, it gets complicated fast to write a polyrhythmic/polymetric drum parts as shifts tend to go over the bar lines. The other property of such parts is: it tend to unfold in a simple way from simple ideas such as "I want to create a drum part that will have a 3 against 4 feel with a kick drum against a snare drum". The other way to think about it is that it has a simple blueprint, but it's tricky to express in the western musical notation. This is why `Polyrhythmix` exists. I wanted to have a simple tool to workshop/brainstorm rhythmic ideas and evaluate them by having a MIDI playback. I'm into modern progressive rock/metal music, fusion, so it all applies very well. I have an impression it may be useful for indian carnatic music as well, but I would like to get some insightful confirmation on that.
 
 # Features
 
-**Drum Generation**: Poly takes a DSL input to define polyrhythmic patterns for various drum instruments. It intelligently calculates when different drum parts will converge, ensuring rhythmic synchronization.
+**Drum Generation**: Polyrhythmix takes a DSL input to define polyrhythmic patterns for various drum instruments. It intelligently calculates when different drum parts will converge, ensuring rhythmic synchronization.
 
-**MIDI File Generation**: Once the polyrhythmic pattern is defined, Poly generates a MIDI file containing the drum parts. This file can be imported into any compatible software or hardware for further editing or playback.
+**MIDI File Generation**: Once the polyrhythmic pattern is defined, Polyrhythmix generates a MIDI file containing the drum parts. This file can be imported into any compatible software or hardware for further editing or playback.
 
-**Bass Track Generation**: Poly offers an option to generate a bass MIDI track that follows the kick drum. This feature provides a foundation for creating cohesive rhythm sections by synchronizing the bassline with the kick drum pattern.
+**Bass Track Generation**: Polyrhythmix offers an option to generate a bass MIDI track that follows the kick drum. This feature provides a foundation for creating cohesive rhythm sections by synchronizing the bassline with the kick drum pattern.
 
 # Usage
 
-Poly runs as an executable with the desired command line options. The available options are as follows:
+Polyrhythmix runs as an executable with the desired command line options. The available options are as follows:
 
 ```
 Usage: poly [OPTIONS]
@@ -46,7 +46,7 @@ Options:
           Print version
 ```
 
-Poly uses a simple DSL (Domain-specific language) for drum patterns. For a more detailed explanation, go to [DSL Overview](#dsl-overview).
+Polyrhythmix uses a simple DSL (Domain-specific language) for drum patterns. For a more detailed explanation, go to [DSL Overview](#dsl-overview).
 
 Let's say you want to tell if two patterns will converge and how soon. We'll start with a 3 against 4. The first pattern would be a series of 8th notes on the kick drum
 
@@ -70,7 +70,7 @@ Converges over 3 bars
 out.mid was written successfully
 ```
 
-Poly operates under an assumption, that it's easy to replicate a pattern that converges over a finite number of bars in the DAW or tablature editor, so it only generates 3 bars of drums in this case. On Mac OS, I usually do something in lines of `poly <OPTIONS> -o out.mid && open out.mid` or `poly <OPTIONS> -o out.mid && open -a 'Guitar Pro 7' out.mid`.
+Polyrhythmix operates under an assumption, that it's easy to replicate a pattern that converges over a finite number of bars in the DAW or tablature editor, so it only generates 3 bars of drums in this case. On Mac OS, I usually do something in lines of `poly <OPTIONS> -o out.mid && open out.mid` or `poly <OPTIONS> -o out.mid && open -a 'Guitar Pro 7' out.mid`.
 
 This way it defaults to 4/4 as a time signature, but we may want to interpret this rhythmic pattern in 3/4 for example. Let's try it:
 
@@ -130,9 +130,7 @@ It's possible to repeat a group of notes of same length with the following synta
 * `(3,8x-x)` means repeat three times a series of hit, rest, hit in eighth notes
 
 Now that we know that, we may sequence multiple groups like this:
-* `32xx16xx` - Kick pattern from "Bleed" by Meshuggah
-
-...
+* `32xx16xx` - Kick pattern from "[Bleed](doc/bleed.mid)" by Meshuggah
 
 ## Guitar pro remarks
 

@@ -1,5 +1,5 @@
 [package]
-name = "poly"
+name = "polyrhythmix"
 description = "Polyrhythmically-inclinded Midi Drum generator"
 homepage = "https://github.com/dredozubov/poly"
 repository = "https://github.com/dredozubov/poly"
