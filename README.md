@@ -6,7 +6,7 @@ Polyrhythmix is specifically designed to assist musicians and composers working 
 
 # Motivation
 
-I'm a guitar player, and I use tablature notation editors such as Guitar Pro a lot. However, it gets complicated fast when you write polyrhythmic/polymetric drum parts, because shifts tend to go over the bar lines. The other property of such parts is: it tends to unfold from simple ideas such as "I want to create a drum part that will have a 3 against 4 feel with a kick drum against a snare drum". The other way to think about it is that it has a simple blueprint, but it's tricky and error-prone to express in Western musical notation. This is why `Polyrhythmix` exists. I wanted to have a simple tool to workshop/brainstorm rhythmic ideas and evaluate them by having a MIDI playback. I'm into modern Progressive Rock/Metal music, Fusion, so it all applies very well. I have an impression it may be useful for Indian Carnatic music as well, but I would like to get some insightful confirmation on that.
+I'm a guitar player, and I use tablature notation editors such as Guitar Pro a lot. However, it gets complicated fast when I write polyrhythmic/polymetric drum parts, because shifts tend to go over the bar lines and it's hard to make sense it's correct visually (may be even harder if you listen to it). The other property of such parts is: it tends to unfold from simple ideas such as "I want to create a drum part that will have a 3 against 4 feel with a kick drum against a snare drum". The other way to think about it is that it has a simple blueprint, but it's tricky and error-prone to express in Western musical notation. This is why `Polyrhythmix` exists. I wanted to have a simple tool to workshop/brainstorm rhythmic ideas and evaluate them by having a MIDI playback. I'm into modern Progressive Rock/Metal music, Fusion, so it all applies very well. I have an impression it may be useful for Indian Carnatic music as well, but I would like to get some insightful confirmation on that.
 
 # Features
 
@@ -113,7 +113,7 @@ poly -t 115 -K '32xx16xx' -H '8x' -S '4--x-' -B -o bleed.mid
 
 Congratulations, now you have a basic version of "[Bleed](doc/bleed.mid)" by Meshuggah!
 
-To get to the next level, you need to understand that note groups can be recursive if you nest them. For example `(3,8x(3,16x-xx(3,32xx-x))))` would read as "Three 
+To get to the next level, you need to understand that note groups can be recursive if you nest them. For example `(3,8x(3,16x-xx(3,32xx-x))))` would read as "Three repeats of an eighth note hit, then three nested repeats of hit, rest, hit, hit in sixteenth notes, then three repeats of hit, hit, rest, hit in thirty-second notes". It sure is a mouthful, but the point is: any repeat of a nested child group would be applied to every repeat of the parent group that includes it. 
 
 # DSL overview
 
@@ -142,7 +142,7 @@ It's possible to repeat a group of notes of the same length with the following s
 Now that we know that, we may sequence multiple groups like this:
 * `32xx16xx` - Kick pattern from "[Bleed](doc/bleed.mid)" by Meshuggah
 
-Note groups can be nested within each other, which interacts in interesting way with repeats:
+Note groups can be nested within each other, which interacts in interesting ways with repeats:
 * `(3,16x(3,8txxx(3,32x-x-x-)))` I'm struggling to make a compelling example, so here's a triple-nested pattern that converges over 471 bars of 4/4
 
 ## Guitar pro remarks
