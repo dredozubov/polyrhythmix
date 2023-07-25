@@ -12,7 +12,7 @@ use DrumPart::*;
 #[derive(Debug, Parser, Clone)]
 #[command(name = "Polyrhythmix")]
 #[command(author = "Denis Redozubov <denis.redozubov@gmail.com>")]
-#[command(version = "0.1")]
+#[command(version = "0.1.0")]
 #[command(about = "Polyrhythmically-inclinded Midi Drum generator", long_about = None)]
 struct Cli {
     #[arg(short = 'K', long = "kick", default_value = None, help = "Kick drum pattern")]
@@ -59,7 +59,7 @@ fn validate_and_parse_part(
         Some(pattern) => match dsl::groups(pattern.as_str()) {
             Ok((_, groups)) => {
                 patterns.insert(part, groups);
-            }
+            },
             Err(_) => {
                 panic!("{} pattern is malformed.", part_to_string(part))
             }
